@@ -201,3 +201,19 @@ body {
     align-items: flex-start;
   }
 }
+.logos-block {
+  margin-top: 40px;
+  text-align: center;
+}
+
+.logos-block h2 {
+  margin-bottom: 24px;
+}
+
+.logos-collage {
+  width: 100%;
+  max-width: 920px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}

@@ -211,9 +211,9 @@ body {
 }
 
 .logos-collage {
-  width: 100%;
-  max-width: 520px;
-  height: auto;
+  width: 100% !important;
+  max-width: 620px !important;
+  height: auto !important;
   display: block;
   margin: 0 auto;
 }

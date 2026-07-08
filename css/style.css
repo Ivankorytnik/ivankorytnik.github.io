@@ -217,3 +217,17 @@ body {
   display: block;
   margin: 0 auto;
 }
+.photo-block {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.profile-photo {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border-radius: 24px;
+  display: block;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}

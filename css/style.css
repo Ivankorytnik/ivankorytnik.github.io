@@ -214,7 +214,7 @@ body {
   color: #9ca3af;
 }
 
-/* ОБЩИЕ ССЫЛКИ В СЕКЦИЯХ */
+/* ССЫЛКИ В СЕКЦИЯХ */
 
 .section a {
   color: #22d3ee;
@@ -435,6 +435,7 @@ body {
   padding: 24px;
   border-radius: 20px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(34, 211, 238, 0.18);
 }
 
 .contacts-info h3,
@@ -445,9 +446,27 @@ body {
 }
 
 .contacts-info p {
-  margin: 0 0 12px;
-  font-size: 18px;
-  color: #e5e7eb;
+  margin: 0 0 14px;
+  font-size: 19px;
+  color: #f9fafb;
+  font-weight: 700;
+}
+
+.contacts-info a {
+  color: #22d3ee;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.contacts-info a:hover {
+  color: #f9fafb;
+  text-decoration: underline;
+}
+
+.contacts-info strong {
+  color: #22d3ee;
+  font-weight: 700;
 }
 
 .google-form iframe {

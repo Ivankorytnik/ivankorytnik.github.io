@@ -214,6 +214,36 @@ body {
   color: #9ca3af;
 }
 
+/* ОБЩИЕ ССЫЛКИ В СЕКЦИЯХ */
+
+.section a {
+  color: #22d3ee;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.section a:hover {
+  color: #f9fafb;
+  text-decoration: underline;
+}
+
+/* EDUCATION */
+
+.education-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #22d3ee;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.education-link:hover {
+  color: #f9fafb;
+  text-decoration: underline;
+}
+
 /* LOGOS */
 
 .logos-block {

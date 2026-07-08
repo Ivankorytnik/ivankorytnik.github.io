@@ -185,6 +185,44 @@ r<!DOCTYPE html>
     </div>
   </div>
 </section>
+  <div class="photo-modal" id="photoModal">
+  <span class="photo-modal__close" id="photoModalClose">&times;</span>
+  <img class="photo-modal__image" id="photoModalImage" src="" alt="">
+</div>
+
+<script>
+  const photoImages = document.querySelectorAll(".photo-gallery img");
+  const photoModal = document.getElementById("photoModal");
+  const photoModalImage = document.getElementById("photoModalImage");
+  const photoModalClose = document.getElementById("photoModalClose");
+
+  photoImages.forEach(function(image) {
+    image.addEventListener("click", function() {
+      photoModalImage.src = image.src;
+      photoModalImage.alt = image.alt;
+      photoModal.classList.add("active");
+    });
+  });
+
+  photoModalClose.addEventListener("click", function() {
+    photoModal.classList.remove("active");
+    photoModalImage.src = "";
+  });
+
+  photoModal.addEventListener("click", function(event) {
+    if (event.target === photoModal) {
+      photoModal.classList.remove("active");
+      photoModalImage.src = "";
+    }
+  });
+
+  document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") {
+      photoModal.classList.remove("active");
+      photoModalImage.src = "";
+    }
+  });
+</script>  
 
 <div class="photo-modal" id="photoModal">
   <span class="photo-modal__close" id="photoModalClose">&times;</span>

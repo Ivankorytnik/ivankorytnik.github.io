@@ -28,34 +28,31 @@
 
   <main>
 
-   <section class="hero">
-  <div class="container hero__inner">
+    <section class="hero">
+      <div class="container hero__inner">
 
-    <div class="hero__content">
-      <p class="hero__tag">B2B • Таксопарки • Партнерские сети • Аналитика</p>
+        <div class="hero__content">
+          <p class="hero__tag">B2B • Таксопарки • Партнерские сети • Аналитика</p>
 
-      <h1>Иван Корытник</h1>
+          <h1>Иван Корытник</h1>
 
-      <p class="hero__text">
-        Помогаю компаниям выстраивать B2B-продажи, развивать партнерские каналы,
-        работать с таксопарками и принимать решения на основе данных.
-      </p>
+          <p class="hero__text">
+            Помогаю компаниям выстраивать B2B-продажи, развивать партнерские каналы,
+            работать с таксопарками и принимать решения на основе данных.
+          </p>
 
-      <div class="hero__actions">
-        <a href="#projects" class="button">Смотреть проекты</a>
-        <a href="#contacts" class="button button--secondary">Связаться</a>
+          <div class="hero__actions">
+            <a href="#projects" class="button">Смотреть проекты</a>
+            <a href="#contacts" class="button button--secondary">Связаться</a>
+          </div>
+        </div>
+
+        <div class="hero__photo">
+          <img src="assets/images/Atom_auto.jpg" alt="Иван Корытник">
+        </div>
+
       </div>
-    </div>
-
-    <div class="hero__photo">
-      <img 
-        src="assets/images/Atom_auto.jpg" 
-        alt="Иван Корытник"
-      >
-    </div>
-
-  </div>
-</section>
+    </section>
 
     <section id="about" class="section">
       <div class="container">
@@ -243,7 +240,41 @@
     </div>
   </footer>
 
-  <script src="js/main.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const photoImages = document.querySelectorAll(".photo-card img");
+      const photoModal = document.getElementById("photoModal");
+      const photoModalImage = document.getElementById("photoModalImage");
+      const photoModalClose = document.getElementById("photoModalClose");
+
+      photoImages.forEach(function (image) {
+        image.addEventListener("click", function () {
+          photoModalImage.src = image.src;
+          photoModalImage.alt = image.alt;
+          photoModal.classList.add("active");
+        });
+      });
+
+      photoModalClose.addEventListener("click", function () {
+        photoModal.classList.remove("active");
+        photoModalImage.src = "";
+      });
+
+      photoModal.addEventListener("click", function (event) {
+        if (event.target === photoModal) {
+          photoModal.classList.remove("active");
+          photoModalImage.src = "";
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          photoModal.classList.remove("active");
+          photoModalImage.src = "";
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>

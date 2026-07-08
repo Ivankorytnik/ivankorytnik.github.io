@@ -109,12 +109,11 @@ body {
   flex-wrap: wrap;
 }
 
-/* ВЕРХНЕЕ ФОТО СПРАВА — РАМКА ПОД РАЗМЕР ФОТО */
+/* ВЕРХНЕЕ ФОТО СПРАВА */
 
 .hero__photo {
   width: 340px;
   flex-shrink: 0;
-
   padding: 14px;
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.08);
@@ -143,12 +142,15 @@ body {
   text-decoration: none;
   font-weight: 700;
   font-size: 15px;
+  border: none;
+  cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 10px 24px rgba(0, 87, 255, 0.28);
 }
 
 .button:hover {
   background: #0047d6;
+  color: #ffffff;
   transform: translateY(-2px);
   box-shadow: 0 14px 30px rgba(0, 87, 255, 0.36);
 }
@@ -385,11 +387,43 @@ body {
   color: #00d8c8;
 }
 
-/* CONTACTS */
+/* CONTACTS + GOOGLE FORM */
 
-#contacts p {
-  margin: 8px 0;
+.contacts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.contacts-info,
+.google-form {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.contacts-info h3,
+.google-form h3 {
+  margin: 0 0 18px;
+  font-size: 24px;
+  color: #111827;
+}
+
+.contacts-info p {
+  margin: 0 0 12px;
   font-size: 18px;
+  color: #374151;
+}
+
+.google-form iframe {
+  display: block;
+  width: 100%;
+  min-height: 760px;
+  border: none;
+  border-radius: 14px;
+  background: #ffffff;
 }
 
 /* FOOTER */
@@ -449,6 +483,10 @@ body {
 
   .stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .contacts-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -513,5 +551,9 @@ body {
 
   .stats {
     grid-template-columns: 1fr;
+  }
+
+  .google-form iframe {
+    min-height: 820px;
   }
 }

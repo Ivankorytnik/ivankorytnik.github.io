@@ -1,99 +1,182 @@
-/* Hero */
-.hero {
-  padding: 90px 0;
-  background: #f5f7fa;
-}
+r<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-.hero__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 60px;
-}
+  <title>Иван Корытник — B2B, таксопарки и аналитика продаж</title>
 
-.hero__content {
-  max-width: 650px;
-}
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
 
-.hero__tag {
-  margin: 0 0 18px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #2563eb;
-}
+  <header class="header">
+    <div class="container header__inner">
+      <div class="logo">Иван Корытник</div>
 
-.hero h1 {
-  margin: 0 0 24px;
-  font-size: 56px;
-  line-height: 1.05;
-  color: #111827;
-}
+    <nav class="nav">
+  <a href="#about">Обо мне</a>
+  <a href="#skills">Компетенции</a>
+  <a href="#projects">Проекты</a>
+  <a href="#results">Достижения</a>
+  <a href="#photo">Фото</a>
+  <a href="#contacts">Контакты</a>
+</nav>
+    </div>
+  </header>
 
-.hero__text {
-  margin: 0 0 36px;
-  max-width: 560px;
-  font-size: 20px;
-  line-height: 1.6;
-  color: #4b5563;
-}
+  <main>
 
-.hero__actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
+    <section class="hero">
+      <div class="container">
+        <p class="hero__tag">B2B • Таксопарки • Партнерские сети • Аналитика</p>
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 0 24px;
-  border-radius: 999px;
-  background: #111827;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: 0.2s ease;
-}
+        <h1>
+          Иван Корытник
+        </h1>
 
-.button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 28px rgba(17, 24, 39, 0.18);
-}
+        <p class="hero__text">
+          Помогаю компаниям выстраивать B2B-продажи, развивать партнерские каналы,
+          работать с таксопарками и принимать решения на основе данных.
+        </p>
 
-.button--secondary {
-  background: #ffffff;
-  color: #111827;
-  border: 1px solid #d1d5db;
-}
+        <div class="hero__actions">
+          <a href="#projects" class="button">Смотреть проекты</a>
+          <a href="#contacts" class="button button--secondary">Связаться</a>
+        </div>
+      </div>
+    </section>
 
-.hero__photo {
-  flex-shrink: 0;
-  position: relative;
-}
+     <section id="about" class="section">
+      <div class="container">
+              
 
-.hero__photo::before {
-  content: "";
-  position: absolute;
-  inset: -14px;
-  border-radius: 36px;
-  background: linear-gradient(135deg, #2563eb, #111827);
-  opacity: 0.12;
-  z-index: 0;
-}
+<div class="logos-block">
+  <h2>Опыт работы с компаниями и проектами</h2>
+  <img 
+    src="assets/images/logos-collage.png" 
+    alt="АТОМ, Gett, Купер, Яндекс, Яндекс Гараж" 
+    class="logos-collage"
+  />
+</div>
+        
+        <p>
+          15+ лет в рынке такси, B2B-продаж, партнерских сетей и автомобильных сервисов.
+          Работал с Gett, GetCar, Яндекс, Яндекс.Доставка, Яндекс.Гараж, сейчас — АТОМ.
+        </p>
+        <p>
+          В АТОМ отвечаю за работу с таксопарками РФ и аналитику B2B-продаж.
+          Провел более 700 встреч, заключил 200+ LOI, выстроил контактную базу
+          с руководителями 1000+ таксопарков.
+        </p>
+      </div>
+    </section>
 
-.hero__photo img {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 340px;
-  height: 420px;
-  object-fit: cover;
-  border-radius: 32px;
-  box-shadow: 0 28px 70px rgba(17, 24, 39, 0.22);
-}
+    <section id="skills" class="section section--dark">
+      <div class="container">
+        <h2>Ключевые компетенции</h2>
+
+        <div class="cards">
+          <div class="card">B2B-продажи</div>
+          <div class="card">Таксопарки</div>
+          <div class="card">Партнерские сети</div>
+          <div class="card">CRM и воронки продаж</div>
+          <div class="card">PostgreSQL</div>
+          <div class="card">DataLens</div>
+          <div class="card">Сквозная аналитика</div>
+          <div class="card">Управленческая отчетность</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="projects" class="section">
+      <div class="container">
+        <h2>Проекты</h2>
+
+        <div class="project">
+          <h3>Сквозная аналитика АТОМ</h3>
+          <p>
+            Проект по объединению данных сайта, Яндекс Метрики, ЭЛМА и Альфа-Авто
+            для контроля пути клиента от канала привлечения до сделки.
+          </p>
+        </div>
+
+        <div class="project">
+          <h3>Развитие направления таксопарков</h3>
+          <p>
+            Работа с таксопарками по всей России, проведение встреч, сбор потребностей,
+            заключение LOI и развитие партнерской базы.
+          </p>
+        </div>
+
+        <div class="project">
+          <h3>B2B-аналитика продаж</h3>
+          <p>
+            Анализ лидов, статусов, каналов, конверсий и качества данных для принятия
+            управленческих решений.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="results" class="section section--dark">
+      <div class="container">
+        <h2>Достижения в цифрах</h2>
+
+        <div class="stats">
+          <div class="stat">
+            <strong>15+</strong>
+            <span>лет в рынке</span>
+          </div>
+
+          <div class="stat">
+            <strong>700+</strong>
+            <span>встреч</span>
+          </div>
+
+          <div class="stat">
+            <strong>200+</strong>
+            <span>LOI</span>
+          </div>
+
+          <div class="stat">
+            <strong>1000+</strong>
+            <span>контактов таксопарков</span>
+          </div>
+        </div>
+      </div>
+    </section>
+<section id="photo" class="section">
+  <div class="container">
+    <h2>Фото</h2>
+
+    <div class="photo-block">
+      <img 
+        src="assets/images/photo_colaj_2.jpg" 
+        alt="Иван Корытник" 
+        class="profile-photo"
+      />
+    </div>
+  </div>
+</section>
+    <section id="contacts" class="section">
+      <div class="container">
+        <h2>Контакты</h2>
+
+        <p>Telegram: @Iv_kory</p>
+        <p>Email: rezkor@mail.ru</p>
+        <p>Телефон: 89651813649</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© Иван Корытник</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

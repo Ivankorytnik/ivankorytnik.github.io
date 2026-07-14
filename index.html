@@ -111,14 +111,21 @@
                 Перейти в MAX
               </a>
 
-              <a
-                href="https://t.me/Iv_kory"
-                class="button button--telegram"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Перейти в Telegram
-              </a>
+            <a
+  href="https://t.me/Iv_kory"
+  class="button button--telegram"
+  target="_blank"
+  rel="noopener noreferrer"
+  onclick="
+    window.location.href='tg://resolve?domain=Iv_kory';
+    setTimeout(function () {
+      window.open('https://t.me/Iv_kory', '_blank');
+    }, 800);
+    return false;
+  "
+>
+  Перейти в Telegram
+</a>
 
             </div>
 

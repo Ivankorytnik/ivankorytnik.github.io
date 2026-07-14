@@ -8,6 +8,11 @@
     content="width=device-width, initial-scale=1.0"
   >
 
+  <meta
+    name="description"
+    content="Иван Корытник — руководитель B2B-направления, развитие партнерских сетей и коммерческая аналитика."
+  >
+
   <title>
     Иван Корытник — B2B, партнерские сети и коммерческая аналитика
   </title>
@@ -22,11 +27,11 @@
   <header class="header">
     <div class="container header__inner">
 
-      <a href="#" class="logo">
+      <a href="#top" class="logo">
         Иван Корытник
       </a>
 
-      <nav class="nav">
+      <nav class="nav" aria-label="Основное меню">
         <a href="#about">Профиль</a>
         <a href="#focus">Фокус</a>
         <a href="#skills">Компетенции</a>
@@ -40,7 +45,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="top">
 
     <!-- ГЛАВНЫЙ ЭКРАН -->
 
@@ -70,7 +75,9 @@
 
           <div class="hero__actions">
 
-            <div class="hero__actions-main">
+            <!-- ОСНОВНЫЕ КНОПКИ -->
+
+            <div class="hero__actions-primary">
 
               <a href="#experience" class="button">
                 Смотреть опыт
@@ -90,7 +97,9 @@
 
             </div>
 
-            <div class="hero__contacts-actions">
+            <!-- КОНТАКТНЫЕ КНОПКИ -->
+
+            <div class="hero__actions-social">
 
               <a
                 href="assets/ivan-korytnik.vcf"
@@ -100,32 +109,28 @@
                 Добавить в контакты
               </a>
 
-              <!-- Замените ссылку ниже на ссылку своего профиля MAX -->
+              <!--
+                ЗАМЕНИТЕ https://max.ru/
+                НА ВАШУ РАБОЧУЮ ССЫЛКУ MAX
+              -->
 
               <a
-                href="https://max.ru/u/f9LHodD0cOL2QCnUPqm0y_D3bRhpPBGd6V9sqKSGfhb5UK2EIj3g1PYOmxI"
+                href="https://max.ru/"
                 class="button button--max"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                MAX
+                Перейти в MAX
               </a>
 
-            <a
-  href="https://t.me/Iv_kory"
-  class="button button--telegram"
-  target="_blank"
-  rel="noopener noreferrer"
-  onclick="
-    window.location.href='tg://resolve?domain=Iv_kory';
-    setTimeout(function () {
-      window.open('https://t.me/Iv_kory', '_blank');
-    }, 800);
-    return false;
-  "
->
-  Telegram
-</a>
+              <a
+                href="https://t.me/Iv_kory"
+                class="button button--telegram"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Перейти в Telegram
+              </a>
 
             </div>
 
@@ -133,11 +138,21 @@
 
         </div>
 
+        <!-- ГЛАВНОЕ ФОТО В РАМЕ -->
+
         <div class="hero__photo">
-          <img
-            src="assets/images/Atom_auto.jpg"
-            alt="Иван Корытник"
-          >
+
+          <div class="hero__photo-frame">
+
+            <img
+              src="assets/images/Atom_auto.jpg"
+              alt="Иван Корытник"
+              width="1200"
+              height="1600"
+            >
+
+          </div>
+
         </div>
 
       </div>
@@ -154,35 +169,38 @@
 
           <img
             src="assets/images/logos-collage.png"
-            alt="АТОМ, Gett, Купер, Яндекс, Яндекс Гараж"
+            alt="АТОМ, Gett, Купер, Яндекс и Яндекс Гараж"
             class="logos-collage"
+            loading="lazy"
           >
 
         </div>
 
-        <h2>Профиль</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Обо мне</p>
+          <h2>Профиль</h2>
+        </div>
 
-        <p>
-          Руководитель B2B-направления с опытом развития
-          партнерских сетей, транспортных сервисов
-          и коммерческой аналитики.
-        </p>
+        <div class="profile-text">
 
-        <p>
-          Работал с B2B-клиентами, автопарками,
-          таксопарками, перевозчиками, водителями
-          и цифровыми платформами в АТОМ,
-          Яндекс.Гараж, Яндекс.Доставка,
-          GetCar, Gett и Купер.
-        </p>
+          <p>
+            Руководитель B2B-направления с опытом развития
+            партнерских сетей, транспортных сервисов
+            и коммерческой аналитики. Работал с B2B-клиентами,
+            автопарками, таксопарками, перевозчиками,
+            водителями и цифровыми платформами в АТОМ,
+            Яндекс.Гараж, Яндекс.Доставка, GetCar, Gett и Купер.
+          </p>
 
-        <p>
-          Умею быстро собрать рынок, выйти на лиц,
-          принимающих решения, выстроить воронку,
-          запустить пилот, заключить LOI или договор
-          и сделать продажи управляемыми через CRM,
-          KPI, план-факт и BI-аналитику.
-        </p>
+          <p>
+            Умею быстро собрать рынок, выйти на лиц,
+            принимающих решения, выстроить воронку,
+            запустить пилот, заключить LOI или договор
+            и сделать продажи управляемыми через CRM,
+            KPI, план-факт и BI-аналитику.
+          </p>
+
+        </div>
 
       </div>
     </section>
@@ -192,11 +210,17 @@
     <section id="focus" class="section">
       <div class="container">
 
-        <h2>Профессиональный фокус</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Направления работы</p>
+          <h2>Профессиональный фокус</h2>
+        </div>
 
         <div class="skills">
 
-          <div class="skill">
+          <article class="skill">
+
+            <span class="skill__number">01</span>
+
             <h3>Развитие B2B-продаж</h3>
 
             <p>
@@ -204,9 +228,13 @@
               встречи, переговоры, пилоты,
               LOI, договоры и развитие партнерской сети.
             </p>
-          </div>
 
-          <div class="skill">
+          </article>
+
+          <article class="skill">
+
+            <span class="skill__number">02</span>
+
             <h3>Управляемая воронка продаж</h3>
 
             <p>
@@ -214,9 +242,13 @@
               коммерческое предложение, пилот,
               договор, поставка и повторные продажи.
             </p>
-          </div>
 
-          <div class="skill">
+          </article>
+
+          <article class="skill">
+
+            <span class="skill__number">03</span>
+
             <h3>Коммерческая аналитика</h3>
 
             <p>
@@ -224,7 +256,8 @@
               прогноз, план-факт, KPI
               и регулярная управленческая отчетность.
             </p>
-          </div>
+
+          </article>
 
         </div>
 
@@ -236,42 +269,54 @@
     <section id="skills" class="section">
       <div class="container">
 
-        <h2>Компетенции</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Экспертиза</p>
+          <h2>Компетенции</h2>
+        </div>
 
         <div class="skills">
 
-          <div class="skill">
+          <article class="skill">
+
+            <span class="skill__number">01</span>
+
             <h3>B2B-продажи и партнерские сети</h3>
 
             <p>
-              Развитие каналов продаж,
-              переговоры с ЛПР, пилоты,
-              LOI, договоры, партнерские программы
+              Развитие каналов продаж, переговоры с ЛПР,
+              пилоты, LOI, договоры, партнерские программы
               и масштабирование сети.
             </p>
-          </div>
 
-          <div class="skill">
+          </article>
+
+          <article class="skill">
+
+            <span class="skill__number">02</span>
+
             <h3>Транспортный рынок</h3>
 
             <p>
-              Глубокое знание таксопарков,
-              автопарков, перевозчиков,
-              водителей, курьерских служб
+              Глубокое знание таксопарков, автопарков,
+              перевозчиков, водителей, курьерских служб
               и цифровых платформ.
             </p>
-          </div>
 
-          <div class="skill">
+          </article>
+
+          <article class="skill">
+
+            <span class="skill__number">03</span>
+
             <h3>CRM, KPI и аналитика</h3>
 
             <p>
-              CRM-воронка, KPI, план-факт,
-              прогноз продаж, BI-дашборды,
-              PostgreSQL, DataLens, Tableau,
+              CRM-воронка, KPI, план-факт, прогноз продаж,
+              BI-дашборды, PostgreSQL, DataLens, Tableau,
               Excel, ELMA и amoCRM.
             </p>
-          </div>
+
+          </article>
 
         </div>
 
@@ -283,186 +328,146 @@
     <section id="experience" class="section">
       <div class="container">
 
-        <h2>Опыт и ключевые проекты</h2>
-
-        <div class="project">
-
-          <h3>АО «КАМА» / электромобиль АТОМ</h3>
-
-          <p class="project__meta">
-            11.2022 — настоящее время ·
-            Руководитель по развитию партнерской сети B2B /
-            аналитика продаж
-          </p>
-
-          <p>
-            Развиваю федеральную сеть партнеров
-            для вывода нового автомобильного бренда
-            на рынок РФ.
-          </p>
-
-          <p>
-            Отвечаю за поиск, сегментацию,
-            встречи, переговоры, LOI,
-            договоры и контроль pipeline.
-          </p>
-
-          <p>
-            Сформировал партнерскую базу 1200+ компаний,
-            заключил LOI с 60 компаниями
-            с потенциалом 52 000 автомобилей,
-            подписал контракты со 187 партнерами
-            на 5 500 автомобилей.
-          </p>
-
-          <p>
-            Настроил CRM-воронку, KPI,
-            план-факт, прогноз и BI-аналитику
-            на базе PostgreSQL и DataLens.
-          </p>
-
+        <div class="section-heading">
+          <p class="section-heading__label">Карьера</p>
+          <h2>Опыт и ключевые проекты</h2>
         </div>
 
-        <div class="project">
+        <div class="experience-list">
 
-          <h3>Купер</h3>
+          <article class="project">
 
-          <p class="project__meta">
-            11.2021 — 09.2022 ·
-            Старший менеджер проектов
-          </p>
+            <h3>АО «КАМА» / электромобиль АТОМ</h3>
 
-          <p>
-            Синхронизировал бизнес, партнеров
-            и операционные команды
-            для внедрения изменений.
-          </p>
+            <p class="project__meta">
+              11.2022 — настоящее время ·
+              Руководитель по развитию партнерской сети B2B /
+              аналитика продаж
+            </p>
 
-          <p>
-            Проводил аудит процессов
-            и качества сервиса,
-            внедрял стандарты работы партнеров,
-            анализировал данные в PostgreSQL
-            и автоматизировал отчетность
-            в Tableau и DataLens.
-          </p>
+            <p>
+              Развиваю федеральную сеть партнеров
+              для вывода нового автомобильного бренда
+              на рынок РФ. Отвечаю за поиск, сегментацию,
+              встречи, переговоры, LOI, договоры
+              и контроль pipeline.
+            </p>
 
-        </div>
+            <p>
+              Сформировал партнерскую базу 1200+ компаний,
+              заключил LOI с 60 компаниями с потенциалом
+              52 000 автомобилей, подписал контракты
+              со 187 партнерами на 5 500 автомобилей.
+              Настроил CRM-воронку, KPI, план-факт,
+              прогноз и BI-аналитику на базе PostgreSQL
+              и DataLens.
+            </p>
 
-        <div class="project">
+          </article>
 
-          <h3>Яндекс.Доставка</h3>
+          <article class="project">
 
-          <p class="project__meta">
-            10.2020 — 11.2021 ·
-            Менеджер проектов
-          </p>
+            <h3>Купер</h3>
 
-          <p>
-            Управлял развитием партнерской сети
-            и операционными метриками
-            в Москве и Московской области.
-          </p>
+            <p class="project__meta">
+              11.2021 — 09.2022 ·
+              Старший менеджер проектов
+            </p>
 
-          <p>
-            Подключил 360+ новых партнеров
-            и активировал 50 000+ исполнителей.
-          </p>
+            <p>
+              Синхронизировал бизнес, партнеров
+              и операционные команды для внедрения изменений.
+              Проводил аудит процессов и качества сервиса,
+              внедрял стандарты работы партнеров,
+              анализировал данные в PostgreSQL
+              и автоматизировал отчетность
+              в Tableau и DataLens.
+            </p>
 
-          <p>
-            Координировал KPI, SLA,
-            качество исполнения,
-            отмены и время подачи.
-          </p>
+          </article>
 
-        </div>
+          <article class="project">
 
-        <div class="project">
+            <h3>Яндекс.Доставка</h3>
 
-          <h3>Яндекс.Гараж</h3>
+            <p class="project__meta">
+              10.2020 — 11.2021 · Менеджер проектов
+            </p>
 
-          <p class="project__meta">
-            10.2019 — 10.2020 ·
-            Руководитель проекта
-          </p>
+            <p>
+              Управлял развитием партнерской сети
+              и операционными метриками в Москве
+              и Московской области. Подключил 360+ новых
+              партнеров и активировал 50 000+ исполнителей.
+              Координировал KPI, SLA, качество исполнения,
+              отмены и время подачи.
+            </p>
 
-          <p>
-            Запустил с нуля цифровой сервис
-            для транспортного рынка
-            и партнерской сети.
-          </p>
+          </article>
 
-          <p>
-            Организовал работу с 8000+ партнерами,
-            включая таксопарки,
-            автопарки и курьерские службы.
-          </p>
+          <article class="project">
 
-          <p>
-            Координировал продукт,
-            аналитику и партнерскую сеть,
-            работал с GMV, CR, LTV и CAC.
-          </p>
+            <h3>Яндекс.Гараж</h3>
 
-        </div>
+            <p class="project__meta">
+              10.2019 — 10.2020 · Руководитель проекта
+            </p>
 
-        <div class="project">
+            <p>
+              Запустил с нуля цифровой сервис
+              для транспортного рынка и партнерской сети.
+              Организовал работу с 8000+ партнерами,
+              включая таксопарки, автопарки
+              и курьерские службы. Координировал продукт,
+              аналитику и партнерскую сеть,
+              работал с GMV, CR, LTV и CAC.
+            </p>
 
-          <h3>GetCar Rus</h3>
+          </article>
 
-          <p class="project__meta">
-            01.2018 — 10.2019 ·
-            Chief Operating Officer /
-            Операционный директор
-          </p>
+          <article class="project">
 
-          <p>
-            Выстроил операционную деятельность
-            цифрового сервиса
-            для транспортного рынка с нуля.
-          </p>
+            <h3>GetCar Rus</h3>
 
-          <p>
-            Руководил командой из 25 человек,
-            включая разработчиков.
-          </p>
+            <p class="project__meta">
+              01.2018 — 10.2019 ·
+              Chief Operating Officer / Операционный директор
+            </p>
 
-          <p>
-            Привлек к работе 530 таксопарков Москвы
-            и 36 000 водителей.
-          </p>
+            <p>
+              Выстроил операционную деятельность
+              цифрового сервиса для транспортного рынка
+              с нуля. Руководил командой из 25 человек,
+              включая разработчиков. Привлек к работе
+              530 таксопарков Москвы и 36 000 водителей.
+            </p>
 
-        </div>
+          </article>
 
-        <div class="project">
+          <article class="project">
 
-          <h3>Gett</h3>
+            <h3>Gett</h3>
 
-          <p class="project__meta">
-            11.2012 — 01.2018 ·
-            Ведущий специалист транспортного департамента
-          </p>
+            <p class="project__meta">
+              11.2012 — 01.2018 ·
+              Ведущий специалист транспортного департамента
+            </p>
 
-          <p>
-            Создал и организовал работу
-            транспортного департамента с нуля.
-          </p>
+            <p>
+              Создал и организовал работу транспортного
+              департамента с нуля. Координировал
+              700+ транспортных компаний с парком
+              50 000+ автомобилей. Разработал
+              и внедрил регламенты работы и KPI
+              для транспортных партнеров.
+            </p>
 
-          <p>
-            Координировал 700+ транспортных компаний
-            с парком 50 000+ автомобилей.
-          </p>
+            <p>
+              Лично обучил 2300+ водителей стандартам
+              качества и подключил 400+ новых партнеров.
+            </p>
 
-          <p>
-            Разработал и внедрил регламенты работы
-            и KPI для транспортных партнеров.
-          </p>
-
-          <p>
-            Лично обучил 2300+ водителей
-            стандартам качества
-            и подключил 400+ новых партнеров.
-          </p>
+          </article>
 
         </div>
 
@@ -471,71 +476,60 @@
 
     <!-- ДОСТИЖЕНИЯ -->
 
-    <section
-      id="results"
-      class="section section--dark"
-    >
+    <section id="results" class="section section--dark">
       <div class="container">
 
-        <h2>Достижения в цифрах</h2>
+        <div class="section-heading">
+
+          <p class="section-heading__label">
+            Результаты
+          </p>
+
+          <h2>Достижения в цифрах</h2>
+
+        </div>
 
         <div class="stats">
 
-          <div class="stat">
+          <article class="stat">
             <strong>15+</strong>
-            <span>
-              лет в B2B и транспортных сервисах
-            </span>
-          </div>
+            <span>лет в B2B и транспортных сервисах</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>1200+</strong>
-            <span>
-              B2B-партнеров в АТОМ
-            </span>
-          </div>
+            <span>B2B-партнеров в АТОМ</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>52 000</strong>
-            <span>
-              авто в LOI-потенциале
-            </span>
-          </div>
+            <span>авто в LOI-потенциале</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>187</strong>
-            <span>
-              контрактов с партнерами
-            </span>
-          </div>
+            <span>контрактов с партнерами</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>8000+</strong>
-            <span>
-              партнеров в Яндекс.Гараж
-            </span>
-          </div>
+            <span>партнеров в Яндекс.Гараж</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>700+</strong>
-            <span>
-              транспортных компаний в Gett
-            </span>
-          </div>
+            <span>транспортных компаний в Gett</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>530</strong>
-            <span>
-              таксопарков в GetCar
-            </span>
-          </div>
+            <span>таксопарков в GetCar</span>
+          </article>
 
-          <div class="stat">
+          <article class="stat">
             <strong>50 000+</strong>
-            <span>
-              автомобилей в сети Gett
-            </span>
-          </div>
+            <span>автомобилей в сети Gett</span>
+          </article>
 
         </div>
 
@@ -547,9 +541,12 @@
     <section id="education" class="section">
       <div class="container">
 
-        <h2>Образование</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Базовое образование</p>
+          <h2>Образование</h2>
+        </div>
 
-        <div class="education-card education-card--with-photo">
+        <div class="education-card">
 
           <div class="education-card__content">
 
@@ -563,8 +560,8 @@
             <p>
               Образование дало системное мышление,
               дисциплину, техническую базу
-              и способность работать
-              со сложными организационными задачами.
+              и способность работать со сложными
+              организационными задачами.
             </p>
 
             <a
@@ -583,6 +580,7 @@
             <img
               src="assets/images/RAU.jfif"
               alt="Эмблема Ростовского военного института ракетных войск"
+              loading="lazy"
             >
 
           </div>
@@ -592,86 +590,98 @@
       </div>
     </section>
 
-    <!-- ФОТО -->
+    <!-- ФОТОГАЛЕРЕЯ -->
 
     <section id="photo" class="section">
       <div class="container">
 
-        <h2>Фото</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Галерея</p>
+          <h2>Фото</h2>
+        </div>
 
         <div class="photo-gallery">
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/ATOM_2023.jpg"
               alt="ATOM 2023"
+              loading="lazy"
             >
             <p>ATOM 2023</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/ATOM_2024.jpg"
               alt="ATOM 2024"
+              loading="lazy"
             >
             <p>ATOM 2024</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/ATOM_2025.jpg"
               alt="ATOM 2025"
+              loading="lazy"
             >
             <p>ATOM 2025</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/ATOM_2025_1.jpg"
               alt="ATOM 2025"
+              loading="lazy"
             >
             <p>ATOM 2025</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/Atom_auto.jpg"
               alt="ATOM Auto"
+              loading="lazy"
             >
             <p>ATOM Auto</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/DR_50.jpg"
               alt="GETT 2019"
+              loading="lazy"
             >
             <p>GETT 2019</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/Gett_2014.jpg"
               alt="Gett 2014"
+              loading="lazy"
             >
             <p>Gett 2014</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/Gett_2017.jpg"
               alt="Gett 2017"
+              loading="lazy"
             >
             <p>Gett 2017</p>
-          </div>
+          </article>
 
-          <div class="photo-card">
+          <article class="photo-card">
             <img
               src="assets/images/Prokachra.jpg"
               alt="Прокачка таксопарков"
+              loading="lazy"
             >
             <p>Прокачка таксопарков</p>
-          </div>
+          </article>
 
         </div>
 
@@ -683,6 +693,9 @@
     <div
       class="photo-modal"
       id="photoModal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Просмотр фотографии"
     >
 
       <button
@@ -708,46 +721,56 @@
     <section id="contacts" class="section">
       <div class="container">
 
-        <h2>Контакты</h2>
+        <div class="section-heading">
+          <p class="section-heading__label">Связаться</p>
+          <h2>Контакты</h2>
+        </div>
 
         <div class="contacts-info">
 
           <h3>Со мной можно связаться</h3>
 
-          <p>
-            Telegram:
-            <a
-              href="https://t.me/Iv_kory"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              @Iv_kory
-            </a>
-          </p>
+          <div class="contact-list">
 
-          <p>
-            Email:
-            <a href="mailto:rezkor@mail.ru">
-              rezkor@mail.ru
-            </a>
-          </p>
+            <p>
+              <span>Telegram</span>
 
-          <p>
-            Телефон:
-            <a href="tel:+79651813649">
-              +7 965 181-36-49
-            </a>
-          </p>
+              <a
+                href="https://t.me/Iv_kory"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                @Iv_kory
+              </a>
+            </p>
 
-          <p>
-            Локация: Москва, м. Полежаевская
-          </p>
+            <p>
+              <span>Email</span>
 
-          <p>
-            Командировки: да
-          </p>
+              <a href="mailto:rezkor@mail.ru">
+                rezkor@mail.ru
+              </a>
+            </p>
 
-          
+            <p>
+              <span>Телефон</span>
+
+              <a href="tel:+79651813649">
+                +7 965 181-36-49
+              </a>
+            </p>
+
+            <p>
+              <span>Локация</span>
+              Москва, м. Полежаевская
+            </p>
+
+            <p>
+              <span>Командировки</span>
+              Да
+            </p>
+
+          </div>
 
         </div>
 
@@ -759,8 +782,14 @@
   <!-- ПОДВАЛ -->
 
   <footer class="footer">
-    <div class="container">
+    <div class="container footer__inner">
+
       <p>© Иван Корытник</p>
+
+      <a href="#top">
+        Наверх
+      </a>
+
     </div>
   </footer>
 
@@ -773,14 +802,12 @@
       const photoModalImage = document.getElementById("photoModalImage");
       const photoModalClose = document.getElementById("photoModalClose");
 
-      photoImages.forEach(function (image) {
-        image.addEventListener("click", function () {
-          photoModalImage.src = image.src;
-          photoModalImage.alt = image.alt;
-          photoModal.classList.add("active");
-          document.body.classList.add("modal-open");
-        });
-      });
+      function openPhotoModal(image) {
+        photoModalImage.src = image.src;
+        photoModalImage.alt = image.alt;
+        photoModal.classList.add("active");
+        document.body.classList.add("modal-open");
+      }
 
       function closePhotoModal() {
         photoModal.classList.remove("active");
@@ -788,6 +815,12 @@
         photoModalImage.alt = "";
         document.body.classList.remove("modal-open");
       }
+
+      photoImages.forEach(function (image) {
+        image.addEventListener("click", function () {
+          openPhotoModal(image);
+        });
+      });
 
       photoModalClose.addEventListener("click", closePhotoModal);
 
@@ -798,7 +831,10 @@
       });
 
       document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
+        if (
+          event.key === "Escape" &&
+          photoModal.classList.contains("active")
+        ) {
           closePhotoModal();
         }
       });

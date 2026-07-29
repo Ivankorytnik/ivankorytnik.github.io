@@ -10,14 +10,31 @@
 
   <meta
     name="description"
-    content="Иван Корытник — руководитель B2B-направления, развитие партнерских сетей и коммерческая аналитика."
+    content="Иван Корытник - руководитель B2B-направления, развитие партнерских сетей и коммерческая аналитика."
   >
 
   <title>
-    Иван Корытник — B2B, партнерские сети и коммерческая аналитика
+    Иван Корытник - B2B, партнерские сети и коммерческая аналитика
   </title>
 
   <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    /*
+      Дополнительная защита, чтобы кнопки Telegram и MAX
+      всегда оставались доступными для нажатия.
+    */
+
+    .button--telegram,
+    .button--max,
+    .telegram-link {
+      position: relative;
+      z-index: 50;
+      pointer-events: auto;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+  </style>
 </head>
 
 <body>
@@ -118,11 +135,18 @@
                 Перейти в MAX
               </a>
 
+              <!--
+                href является резервной ссылкой.
+                На телефоне JavaScript сначала попробует открыть приложение.
+              -->
+
               <a
                 href="https://t.me/Iv_kory"
-                class="button button--telegram"
+                class="button button--telegram telegram-link"
+                data-telegram-link
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Открыть Telegram Ивана Корытника"
               >
                 Перейти в Telegram
               </a>
@@ -323,7 +347,7 @@
             <h3>АО «КАМА» / электромобиль АТОМ</h3>
 
             <p class="project__meta">
-              11.2022 — настоящее время ·
+              11.2022 - настоящее время ·
               Руководитель по развитию партнерской сети B2B /
               аналитика продаж
             </p>
@@ -353,7 +377,7 @@
             <h3>Купер</h3>
 
             <p class="project__meta">
-              11.2021 — 09.2022 ·
+              11.2021 - 09.2022 ·
               Старший менеджер проектов
             </p>
 
@@ -374,7 +398,7 @@
             <h3>Яндекс.Доставка</h3>
 
             <p class="project__meta">
-              10.2020 — 11.2021 · Менеджер проектов
+              10.2020 - 11.2021 · Менеджер проектов
             </p>
 
             <p>
@@ -393,7 +417,7 @@
             <h3>Яндекс.Гараж</h3>
 
             <p class="project__meta">
-              10.2019 — 10.2020 · Руководитель проекта
+              10.2019 - 10.2020 · Руководитель проекта
             </p>
 
             <p>
@@ -413,7 +437,7 @@
             <h3>GetCar Rus</h3>
 
             <p class="project__meta">
-              01.2018 — 10.2019 ·
+              01.2018 - 10.2019 ·
               Chief Operating Officer / Операционный директор
             </p>
 
@@ -432,7 +456,7 @@
             <h3>Gett</h3>
 
             <p class="project__meta">
-              11.2012 — 01.2018 ·
+              11.2012 - 01.2018 ·
               Ведущий специалист транспортного департамента
             </p>
 
@@ -715,8 +739,11 @@
 
               <a
                 href="https://t.me/Iv_kory"
+                class="telegram-link"
+                data-telegram-link
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Открыть Telegram Ивана Корытника"
               >
                 @Iv_kory
               </a>
@@ -783,26 +810,137 @@
     </div>
   </footer>
 
-  <!-- СКРИПТ ФОТОГАЛЕРЕИ -->
-
   <script>
     document.addEventListener("DOMContentLoaded", function () {
-      const photoImages = document.querySelectorAll(".photo-card img");
-      const photoModal = document.getElementById("photoModal");
-      const photoModalImage = document.getElementById("photoModalImage");
-      const photoModalClose = document.getElementById("photoModalClose");
+
+      /*
+        ОТКРЫТИЕ TELEGRAM
+
+        На компьютере используется обычная ссылка:
+        https://t.me/Iv_kory
+
+        На телефоне сначала пробуем открыть приложение:
+        tg://resolve?domain=Iv_kory
+
+        Если приложение не открылось, через 1,2 секунды
+        открываем профиль в браузере.
+      */
+
+      const telegramLinks = document.querySelectorAll(
+        "[data-telegram-link]"
+      );
+
+      const telegramUsername = "Iv_kory";
+      const telegramWebUrl =
+        "https://t.me/" + telegramUsername;
+      const telegramAppUrl =
+        "tg://resolve?domain=" + telegramUsername;
+
+      const isMobileDevice =
+        /Android|iPhone|iPad|iPod|Mobile/i.test(
+          navigator.userAgent
+        );
+
+      telegramLinks.forEach(function (telegramLink) {
+
+        telegramLink.addEventListener(
+          "click",
+          function (event) {
+
+            /*
+              На компьютере ничего не перехватываем.
+              Браузер сам откроет ссылку href.
+            */
+
+            if (!isMobileDevice) {
+              return;
+            }
+
+            event.preventDefault();
+
+            let fallbackTimer;
+
+            function cancelFallback() {
+              if (document.hidden) {
+                clearTimeout(fallbackTimer);
+
+                document.removeEventListener(
+                  "visibilitychange",
+                  cancelFallback
+                );
+              }
+            }
+
+            document.addEventListener(
+              "visibilitychange",
+              cancelFallback
+            );
+
+            /*
+              Пробуем открыть приложение Telegram.
+            */
+
+            window.location.href = telegramAppUrl;
+
+            /*
+              Если приложение не открылось,
+              переходим на браузерную ссылку.
+            */
+
+            fallbackTimer = setTimeout(function () {
+
+              document.removeEventListener(
+                "visibilitychange",
+                cancelFallback
+              );
+
+              if (!document.hidden) {
+                window.location.href = telegramWebUrl;
+              }
+
+            }, 1200);
+          }
+        );
+      });
+
+      /*
+        ФОТОГАЛЕРЕЯ
+      */
+
+      const photoImages =
+        document.querySelectorAll(".photo-card img");
+
+      const photoModal =
+        document.getElementById("photoModal");
+
+      const photoModalImage =
+        document.getElementById("photoModalImage");
+
+      const photoModalClose =
+        document.getElementById("photoModalClose");
 
       function openPhotoModal(image) {
+        if (!photoModal || !photoModalImage) {
+          return;
+        }
+
         photoModalImage.src = image.src;
         photoModalImage.alt = image.alt;
+
         photoModal.classList.add("active");
         document.body.classList.add("modal-open");
       }
 
       function closePhotoModal() {
+        if (!photoModal || !photoModalImage) {
+          return;
+        }
+
         photoModal.classList.remove("active");
+
         photoModalImage.src = "";
         photoModalImage.alt = "";
+
         document.body.classList.remove("modal-open");
       }
 
@@ -812,22 +950,41 @@
         });
       });
 
-      photoModalClose.addEventListener("click", closePhotoModal);
+      if (photoModalClose) {
+        photoModalClose.addEventListener(
+          "click",
+          closePhotoModal
+        );
+      }
 
-      photoModal.addEventListener("click", function (event) {
-        if (event.target === photoModal) {
-          closePhotoModal();
-        }
-      });
+      if (photoModal) {
+        photoModal.addEventListener(
+          "click",
+          function (event) {
 
-      document.addEventListener("keydown", function (event) {
-        if (
-          event.key === "Escape" &&
-          photoModal.classList.contains("active")
-        ) {
-          closePhotoModal();
+            if (event.target === photoModal) {
+              closePhotoModal();
+            }
+
+          }
+        );
+      }
+
+      document.addEventListener(
+        "keydown",
+        function (event) {
+
+          if (
+            event.key === "Escape" &&
+            photoModal &&
+            photoModal.classList.contains("active")
+          ) {
+            closePhotoModal();
+          }
+
         }
-      });
+      );
+
     });
   </script>
 

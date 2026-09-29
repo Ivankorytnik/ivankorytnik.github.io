@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LeadRadar AI — MVP</title>
+<meta name="description" content="LeadRadar AI — поиск заявок, тендеров и коммерческих возможностей по заданным параметрам.">
+<style>
+:root{
+  --bg:#07111f;--bg2:#0a1728;--panel:#0f1d31;--panel2:#142640;--line:#223b5d;
+  --text:#eff6ff;--muted:#8ea4bf;--blue:#54a8ff;--blue2:#2b76e8;--green:#4ed7a8;
+  --yellow:#f5c95f;--red:#ff7373;--shadow:0 18px 60px rgba(0,0,0,.28)
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:
+radial-gradient(circle at 85% 0,#13345f 0,#081525 28%,#050b14 65%);color:var(--text);min-height:100vh}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
+.hidden{display:none!important}
+.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;padding:24px 18px;border-right:1px solid var(--line);background:rgba(7,17,31,.9);backdrop-filter:blur(18px)}
+.brand{font-size:21px;font-weight:850;letter-spacing:-.4px}
+.brand b{color:var(--blue)}
+.brand small{display:block;margin-top:5px;font-size:10px;letter-spacing:.9px;color:var(--muted);font-weight:600}
+.demo-pill{display:inline-flex;margin-top:18px;padding:6px 9px;border-radius:999px;background:#3b3015;border:1px solid #6d5720;color:#ffe296;font-size:11px}
+.nav{display:grid;gap:7px;margin-top:22px}
+.nav button{border:0;background:transparent;color:#b9c8d9;text-align:left;padding:11px 12px;border-radius:10px}
+.nav button:hover,.nav button.active{background:var(--panel2);color:#fff}
+.side-foot{position:absolute;left:18px;right:18px;bottom:20px;color:var(--muted);font-size:11px;line-height:1.5}
+.main{padding:28px;max-width:1550px;width:100%;margin:0 auto}
+.topbar{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:20px}
+.title h1{font-size:28px;margin:0;letter-spacing:-.6px}.title p{margin:6px 0 0;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#13243c;color:#fff;border-radius:10px;padding:10px 14px;font-weight:700}
+.btn:hover{filter:brightness(1.09)}.btn.primary{border-color:#438fe5;background:linear-gradient(135deg,#2f8de9,#496cf1)}
+.btn.green{border-color:#2b9f78;background:#113c32;color:#8ff2d0}.btn.danger{color:#ffadad}
+.notice{padding:12px 14px;border:1px solid #6d5720;background:#30270f;color:#ffe6a2;border-radius:12px;font-size:13px;margin-bottom:16px}
+.grid{display:grid;gap:15px}.kpis{grid-template-columns:repeat(5,minmax(0,1fr))}
+.card{background:linear-gradient(180deg,rgba(18,34,56,.97),rgba(10,22,38,.97));border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.kpi{padding:18px}.kpi .label{font-size:12px;color:var(--muted)}.kpi .value{font-size:28px;font-weight:850;margin-top:7px}
+.section{padding:20px;margin-top:16px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.section h2{margin:0;font-size:17px}
+.two{grid-template-columns:1.3fr .7fr}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:12px 13px;border-bottom:1px solid #1e314b;text-align:left;vertical-align:top}
+th{font-size:11px;color:#9fb2ca;background:#0b1728;position:sticky;top:0}td{font-size:13px}
+.opp-title{font-weight:750;line-height:1.35}.opp-sub{font-size:11px;color:var(--muted);margin-top:5px;max-width:600px;line-height:1.45}
+.badge{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;background:#172b48;color:#cad8e9}.badge.green{background:#123a30;color:#7ee9c0}.badge.yellow{background:#3a3118;color:#f8d778}.badge.red{background:#402027;color:#ff9eaa}
+.score{font-weight:850}.score.hi{color:var(--green)}.score.mid{color:var(--yellow)}.score.low{color:var(--red)}
+.muted{color:var(--muted)}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{padding:5px 9px;border-radius:999px;border:1px solid #345577;background:#0d2036;font-size:11px}
+.profile{padding:16px;background:#0b1829;border:1px solid #203a5b;border-radius:13px;margin-bottom:10px}
+.profile-top{display:flex;justify-content:space-between;gap:15px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:11px;color:#a9bad0}
+.field input,.field textarea,.field select{width:100%;border:1px solid var(--line);background:#071522;color:#fff;border-radius:9px;padding:10px}
+.field textarea{min-height:86px;resize:vertical}
+.code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#06111d;border:1px solid var(--line);border-radius:9px;padding:10px;word-break:break-all;font-size:11px}
+.empty{padding:32px;text-align:center;color:var(--muted)}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.68);display:grid;place-items:center;padding:20px}.modal-box{width:min(780px,100%);max-height:90vh;overflow:auto;padding:22px}.modal-head{display:flex;justify-content:space-between;align-items:start;gap:20px}.close{background:transparent;border:0;color:#fff;font-size:26px}
+.search-progress{height:8px;background:#091523;border-radius:999px;overflow:hidden;border:1px solid var(--line)}.search-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#37a2ff,#55dfb0);transition:width .35s}
+.timeline{display:grid;gap:9px}.tl{display:grid;grid-template-columns:14px 1fr;gap:9px;font-size:12px;color:#c5d2e2}.dot{width:9px;height:9px;border-radius:999px;background:#38567b;margin-top:4px}.tl.done .dot{background:var(--green)}
+.toast{position:fixed;right:20px;bottom:20px;z-index:100;background:#172a45;border:1px solid #3c5f88;padding:12px 16px;border-radius:11px;box-shadow:var(--shadow);font-size:13px}
+a{color:#76baff}
+@media(max-width:1050px){.shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}.nav{display:flex;overflow:auto}.side-foot{display:none}.main{padding:18px}.kpis{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+@media(max-width:600px){.kpis{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">LeadRadar <b>AI</b><small>НАЙТИ → ПРОВЕРИТЬ → ОЦЕНИТЬ → ДОСТАВИТЬ</small></div>
+    <div class="demo-pill">● LIVE DEMO MVP</div>
+    <nav class="nav">
+      <button class="active" data-view="dashboard" onclick="go('dashboard',this)">Обзор</button>
+      <button data-view="opportunities" onclick="go('opportunities',this)">Возможности</button>
+      <button data-view="profiles" onclick="go('profiles',this)">Поисковые профили</button>
+      <button data-view="deliveries" onclick="go('deliveries',this)">Доставка</button>
+      <button data-view="integrations" onclick="go('integrations',this)">Интеграции</button>
+      <button data-view="settings" onclick="go('settings',this)">Настройки</button>
+    </nav>
+    <div class="side-foot">Статическая demo-версия на GitHub Pages.<br>Данные сохраняются локально в браузере.</div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="title"><h1 id="pageTitle">Обзор</h1><p id="pageSub">Коммерческие возможности в одном окне</p></div>
+      <div class="actions"><button class="btn" onclick="exportCsv()">CSV</button><button class="btn primary" onclick="runSearch()">Запустить поиск</button></div>
+    </div>
+
+    <div class="notice">Demo MVP: поиск имитирует работу реального pipeline. Backend, API, Telegram, email и crawler находятся в репозитории LeadRadar и подключаются при серверном развертывании.</div>
+
+    <section id="view-dashboard" class="view">
+      <div class="grid kpis">
+        <div class="card kpi"><div class="label">Найдено за 24ч</div><div class="value" id="kFound">0</div></div>
+        <div class="card kpi"><div class="label">Всего возможностей</div><div class="value" id="kTotal">0</div></div>
+        <div class="card kpi"><div class="label">В работе</div><div class="value" id="kWork">0</div></div>
+        <div class="card kpi"><div class="label">Сумма возможностей</div><div class="value" id="kSum">0 ₽</div></div>
+        <div class="card kpi"><div class="label">Доставлено</div><div class="value" id="kDelivered">0</div></div>
+      </div>
+      <div class="grid two">
+        <div class="card section"><div class="section-head"><h2>Свежие Opportunity</h2><button class="btn" onclick="go('opportunities')">Все</button></div><div id="recentOpps"></div></div>
+        <div class="card section"><div class="section-head"><h2>Последние поиски</h2></div><div id="recentRuns"></div></div>
+      </div>
+    </section>
+
+    <section id="view-opportunities" class="view hidden">
+      <div class="card section">
+        <div class="section-head"><h2>Opportunity</h2><select id="statusFilter" class="btn" onchange="renderOpps()"></select></div>
+        <div id="opportunitiesTable"></div>
+      </div>
+    </section>
+
+    <section id="view-profiles" class="view hidden">
+      <div class="card section">
+        <div class="section-head"><h2>Search Profiles</h2><button class="btn primary" onclick="editProfile()">Изменить профиль</button></div>
+        <div id="profilesList"></div>
+      </div>
+    </section>
+
+    <section id="view-deliveries" class="view hidden">
+      <div class="card section"><div class="section-head"><h2>Delivery Log</h2></div><div id="deliveriesTable"></div></div>
+    </section>
+
+    <section id="view-integrations" class="view hidden">
+      <div class="grid two">
+        <div class="card section">
+          <h2>Partner API / Webhook</h2>
+          <div class="form-grid" style="margin-top:14px">
+            <div class="field full"><label>Название интеграции</label><input id="iName" value="Partner CRM"></div>
+            <div class="field full"><label>Endpoint</label><input id="iEndpoint" placeholder="https://crm.company.ru/webhooks/leadradar"></div>
+            <div class="field full"><label>Secret HMAC</label><input id="iSecret" placeholder="secret"></div>
+            <div class="field"><label>Минимальный score</label><input id="iScore" type="number" value="60"></div>
+          </div>
+          <button class="btn primary" style="margin-top:14px" onclick="addIntegration()">Добавить</button>
+        </div>
+        <div class="card section"><div class="section-head"><h2>Подключено</h2></div><div id="integrationsList"></div></div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view hidden">
+      <div class="grid two">
+        <div class="card section">
+          <h2>Каналы доставки</h2>
+          <div class="field" style="margin-top:14px"><label>Email получателей</label><textarea id="emails">sales@company.ru</textarea></div>
+          <div class="field" style="margin-top:12px"><label>Telegram chat / bot</label><input id="telegram" value="@LeadRadarDemoBot"></div>
+          <button class="btn primary" style="margin-top:14px" onclick="saveSettings()">Сохранить</button>
+        </div>
+        <div class="card section">
+          <h2>REST API</h2>
+          <p class="muted" style="font-size:12px">В серверной версии ключ передается через заголовок <b>X-API-Key</b>.</p>
+          <div class="code">lr_demo_8f4d0b2f**************</div>
+          <h2 style="margin-top:22px">Состояние</h2>
+          <div class="chips" style="margin-top:12px">
+            <span class="chip">UI: GitHub Pages</span><span class="chip">Backend: FastAPI</span><span class="chip">DB: SQLite/PostgreSQL</span><span class="chip">Search: Yandex API</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal" class="modal hidden"><div class="card modal-box"><div id="modalContent"></div></div></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const STATUSES=['Новая','Просмотрена','В работе','Подготовка КП','КП отправлено','Переговоры','Победа','Проиграна','Не подходит'];
+const seedOpps=[
+{id:101,title:'Поставка электромобилей для корпоративного автопарка',source:'ЕИС / закупки',url:'https://zakupki.gov.ru/',company:'АО Городская мобильность',region:'Москва',amount:18500000,score:94,status:'Новая',type:'Тендер',foundAt:Date.now()-1000*60*32,summary:'Закупка партии электромобилей для обновления корпоративного парка. Требуется поставка, сервис и гарантийное сопровождение.'},
+{id:102,title:'Запрос коммерческого предложения на 12 электрических автомобилей',source:'Интернет-заявка',url:'#',company:'Логистик Плюс',region:'Москва и МО',amount:9600000,score:87,status:'В работе',type:'Заявка',foundAt:Date.now()-1000*60*105,summary:'Компания рассматривает замену части легкового парка. Срок принятия решения до конца квартала.'},
+{id:103,title:'Аренда электромобилей для каршерингового пилота',source:'Отраслевая площадка',url:'#',company:'Urban Move',region:'Санкт-Петербург',amount:7200000,score:81,status:'Просмотрена',type:'Запрос',foundAt:Date.now()-1000*60*190,summary:'Пилотный проект на 6 месяцев с возможностью масштабирования. Интересуют 10–15 машин.'},
+{id:104,title:'Корпоративный транспорт для IT-компании',source:'Открытый интернет',url:'#',company:'DevCore',region:'Москва',amount:3400000,score:73,status:'Новая',type:'Лид',foundAt:Date.now()-1000*60*310,summary:'Ищут автомобили для служебных поездок руководителей и сотрудников. Важны TCO и сервис.'}
+];
+const seedProfile={id:1,name:'Корпоративные электромобили',services:['поставка автомобилей','лизинг','корпоративный автопарк'],products:['электромобили','EV'],keywords:['закупка','тендер','КП','автопарк','электромобиль'],regions:['Москва','Московская область','Санкт-Петербург'],minScore:60,schedule:6,active:true};
+let state=loadState();
+function loadState(){try{const x=JSON.parse(localStorage.getItem('leadradar_demo_v2'));if(x&&x.opps)return x}catch(e){}return{opps:seedOpps,runs:[{at:Date.now()-1000*60*45,found:2,newCount:1,status:'success'},{at:Date.now()-1000*60*60*7,found:8,newCount:3,status:'success'}],deliveries:[{at:Date.now()-1000*60*28,channel:'Telegram',status:'sent',opp:101},{at:Date.now()-1000*60*27,channel:'Email',status:'sent',opp:101},{at:Date.now()-1000*60*98,channel:'Webhook',status:'sent',opp:102}],profile:seedProfile,integrations:[],settings:{emails:'sales@company.ru',telegram:'@LeadRadarDemoBot'}}}
+function save(){localStorage.setItem('leadradar_demo_v2',JSON.stringify(state))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function fmtMoney(n){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(n||0)+' ₽'}
+function ago(ts){const m=Math.max(1,Math.round((Date.now()-ts)/60000));if(m<60)return m+' мин назад';const h=Math.round(m/60);if(h<24)return h+' ч назад';return Math.round(h/24)+' дн назад'}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.remove('hidden');setTimeout(()=>e.classList.add('hidden'),2600)}
+function go(view,btn){document.querySelectorAll('.view').forEach(x=>x.classList.add('hidden'));document.getElementById('view-'+view).classList.remove('hidden');document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));(btn||document.querySelector('[data-view="'+view+'"]'))?.classList.add('active');const map={dashboard:['Обзор','Коммерческие возможности в одном окне'],opportunities:['Возможности','Все найденные и проверенные Opportunity'],profiles:['Поисковые профили','Что и где ищет система'],deliveries:['Доставка','Telegram, email и Partner API'],integrations:['Интеграции','Передача Opportunity в CRM'],settings:['Настройки','Каналы, API и состояние MVP']};pageTitle.textContent=map[view][0];pageSub.textContent=map[view][1]}
+function badge(status){let c=status==='Победа'?'green':status==='Новая'?'yellow':status==='Проиграна'||status==='Не подходит'?'red':'';return '<span class="badge '+c+'">'+esc(status)+'</span>'}
+function scoreClass(s){return s>=80?'hi':s>=60?'mid':'low'}
+function renderAll(){renderAnalytics();renderOpps();renderProfiles();renderRuns();renderDeliveries();renderIntegrations();emails.value=state.settings.emails;telegram.value=state.settings.telegram}
+function renderAnalytics(){const day=Date.now()-86400000;const found=state.opps.filter(x=>x.foundAt>=day).length;const work=state.opps.filter(x=>['В работе','Подготовка КП','КП отправлено','Переговоры'].includes(x.status)).length;const sum=state.opps.filter(x=>!['Проиграна','Не подходит'].includes(x.status)).reduce((a,b)=>a+(b.amount||0),0);kFound.textContent=found;kTotal.textContent=state.opps.length;kWork.textContent=work;kSum.textContent=fmtMoney(sum);kDelivered.textContent=state.deliveries.filter(x=>x.status==='sent').length;const list=[...state.opps].sort((a,b)=>b.foundAt-a.foundAt).slice(0,4);recentOpps.innerHTML=list.map(o=>'<div style="padding:12px 0;border-bottom:1px solid #1f3451"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="opp-title">'+esc(o.title)+'</div><div class="opp-sub">'+esc(o.company)+' · '+esc(o.region)+' · '+ago(o.foundAt)+'</div></div><div class="score '+scoreClass(o.score)+'">'+o.score+'</div></div></div>').join('')}
+function renderOpps(){const filter=statusFilter.value||'';const data=[...state.opps].sort((a,b)=>b.foundAt-a.foundAt).filter(x=>!filter||x.status===filter);opportunitiesTable.innerHTML=data.length?'<div class="table-wrap"><table><thead><tr><th>Opportunity</th><th>Компания</th><th>Регион</th><th>Сумма</th><th>Score</th><th>Статус</th><th></th></tr></thead><tbody>'+data.map(o=>'<tr><td><div class="opp-title">'+esc(o.title)+'</div><div class="opp-sub">'+esc(o.type)+' · '+esc(o.source)+' · '+ago(o.foundAt)+'</div></td><td>'+esc(o.company)+'</td><td>'+esc(o.region)+'</td><td>'+fmtMoney(o.amount)+'</td><td><span class="score '+scoreClass(o.score)+'">'+o.score+'</span></td><td><select onchange="setStatus('+o.id+',this.value)">'+STATUSES.map(s=>'<option '+(s===o.status?'selected':'')+'>'+s+'</option>').join('')+'</select></td><td><button class="btn" onclick="openOpp('+o.id+')">Открыть</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Ничего не найдено</div>'}
+function setStatus(id,status){const o=state.opps.find(x=>x.id===id);if(o){o.status=status;save();renderAll();toast('Статус обновлен')}}
+function openOpp(id){const o=state.opps.find(x=>x.id===id);modalContent.innerHTML='<div class="modal-head"><div><h2 style="margin:0">'+esc(o.title)+'</h2><p class="muted">'+esc(o.company)+' · '+esc(o.region)+'</p></div><button class="close" onclick="closeModal()">×</button></div><div class="chips"><span class="chip">'+esc(o.type)+'</span><span class="chip">'+esc(o.source)+'</span><span class="chip">Score '+o.score+'</span></div><p style="line-height:1.6">'+esc(o.summary)+'</p><div class="grid two"><div><div class="muted" style="font-size:11px">Потенциальная сумма</div><div style="font-size:24px;font-weight:800;margin-top:5px">'+fmtMoney(o.amount)+'</div></div><div><div class="muted" style="font-size:11px">Статус</div><div style="margin-top:7px">'+badge(o.status)+'</div></div></div><div class="actions" style="margin-top:20px"><button class="btn green" onclick="deliver('+o.id+')">Отправить в каналы</button><button class="btn" onclick="closeModal()">Закрыть</button></div>';modal.classList.remove('hidden')}
+function closeModal(){modal.classList.add('hidden')}
+function renderProfiles(){const p=state.profile;profilesList.innerHTML='<div class="profile"><div class="profile-top"><div><b>'+esc(p.name)+'</b><div class="muted" style="font-size:11px;margin-top:5px">score ≥ '+p.minScore+' · каждые '+p.schedule+' ч · '+(p.active?'активен':'выключен')+'</div><div class="chips" style="margin-top:10px">'+[...p.services,...p.products,...p.keywords,...p.regions].map(x=>'<span class="chip">'+esc(x)+'</span>').join('')+'</div></div><button class="btn primary" onclick="runSearch()">Запустить</button></div></div>'}
+function editProfile(){const p=state.profile;modalContent.innerHTML='<div class="modal-head"><h2 style="margin:0">Поисковый профиль</h2><button class="close" onclick="closeModal()">×</button></div><div class="form-grid" style="margin-top:16px"><div class="field full"><label>Название</label><input id="pName" value="'+esc(p.name)+'"></div><div class="field full"><label>Ключевые слова, через запятую</label><textarea id="pKeys">'+esc(p.keywords.join(', '))+'</textarea></div><div class="field full"><label>Регионы</label><input id="pRegions" value="'+esc(p.regions.join(', '))+'"></div><div class="field"><label>Минимальный score</label><input id="pScore" type="number" value="'+p.minScore+'"></div><div class="field"><label>Интервал, ч</label><input id="pSchedule" type="number" value="'+p.schedule+'"></div></div><button class="btn primary" style="margin-top:16px" onclick="saveProfile()">Сохранить</button>';modal.classList.remove('hidden')}
+function saveProfile(){state.profile.name=pName.value.trim()||state.profile.name;state.profile.keywords=pKeys.value.split(',').map(x=>x.trim()).filter(Boolean);state.profile.regions=pRegions.value.split(',').map(x=>x.trim()).filter(Boolean);state.profile.minScore=Number(pScore.value)||60;state.profile.schedule=Number(pSchedule.value)||6;save();closeModal();renderProfiles();toast('Профиль сохранен')}
+function renderRuns(){recentRuns.innerHTML=state.runs.slice(0,6).map(r=>'<div style="padding:10px 0;border-bottom:1px solid #1e314b"><div style="display:flex;justify-content:space-between"><b style="font-size:12px">Поиск завершен</b><span class="badge green">OK</span></div><div class="muted" style="font-size:11px;margin-top:5px">'+ago(r.at)+' · найдено '+r.found+' · новых '+r.newCount+'</div></div>').join('')}
+function renderDeliveries(){const rows=[...state.deliveries].sort((a,b)=>b.at-a.at);deliveriesTable.innerHTML=rows.length?'<div class="table-wrap"><table><thead><tr><th>Время</th><th>Opportunity</th><th>Канал</th><th>Статус</th></tr></thead><tbody>'+rows.map(d=>{const o=state.opps.find(x=>x.id===d.opp);return '<tr><td>'+new Date(d.at).toLocaleString('ru-RU')+'</td><td>'+esc(o?.title||('#'+d.opp))+'</td><td>'+esc(d.channel)+'</td><td><span class="badge green">'+esc(d.status)+'</span></td></tr>'}).join('')+'</tbody></table></div>':'<div class="empty">Доставок пока нет</div>'}
+function deliver(id){['Telegram','Email','Webhook'].forEach((channel,i)=>state.deliveries.unshift({at:Date.now()+i,channel,status:'sent',opp:id}));save();closeModal();renderAll();toast('Opportunity отправлена в 3 канала')}
+function renderIntegrations(){integrationsList.innerHTML=state.integrations.length?state.integrations.map((x,i)=>'<div class="profile"><b>'+esc(x.name)+'</b><div class="muted" style="font-size:11px;margin-top:5px">'+esc(x.endpoint)+'</div><div class="chips" style="margin-top:9px"><span class="chip">score ≥ '+x.score+'</span><span class="chip">HMAC SHA-256</span></div><button class="btn danger" style="margin-top:10px" onclick="removeIntegration('+i+')">Удалить</button></div>').join(''):'<div class="empty">Интеграции еще не добавлены</div>'}
+function addIntegration(){if(!iEndpoint.value.trim())return toast('Укажите endpoint');state.integrations.push({name:iName.value||'Partner CRM',endpoint:iEndpoint.value,secret:iSecret.value||'demo-secret',score:Number(iScore.value)||60});save();renderIntegrations();iEndpoint.value='';iSecret.value='';toast('Интеграция добавлена')}
+function removeIntegration(i){state.integrations.splice(i,1);save();renderIntegrations()}
+function saveSettings(){state.settings={emails:emails.value,telegram:telegram.value};save();toast('Настройки сохранены')}
+function runSearch(){modalContent.innerHTML='<div class="modal-head"><div><h2 style="margin:0">LeadRadar ищет возможности</h2><p class="muted">Профиль: '+esc(state.profile.name)+'</p></div><button class="close" onclick="closeModal()">×</button></div><div class="search-progress"><i id="bar"></i></div><div class="timeline" style="margin-top:18px"><div class="tl" id="s1"><span class="dot"></span><span>Генерация поисковых запросов</span></div><div class="tl" id="s2"><span class="dot"></span><span>Поиск по интернету и тендерным источникам</span></div><div class="tl" id="s3"><span class="dot"></span><span>Проверка актуальности и антидубли</span></div><div class="tl" id="s4"><span class="dot"></span><span>AI scoring и создание Opportunity</span></div><div class="tl" id="s5"><span class="dot"></span><span>Доставка в выбранные каналы</span></div></div>';modal.classList.remove('hidden');let i=0;const steps=[20,42,64,84,100];const timer=setInterval(()=>{document.getElementById('bar').style.width=steps[i]+'%';document.getElementById('s'+(i+1)).classList.add('done');i++;if(i===steps.length){clearInterval(timer);setTimeout(finishSearch,450)}},420)}
+function finishSearch(){const templates=[['Тендер на поставку электротранспорта для муниципального предприятия','ГУП Транспорт','Москва',12800000,91,'ЕИС / закупки'],['Запрос КП: электромобили для отдела продаж','TechLine','Москва',4200000,84,'Открытый интернет'],['Обновление корпоративного автопарка, 8 автомобилей','Сервис Групп','Московская область',6100000,79,'B2B площадка'],['Пилот электрического корпоративного транспорта','Новая Логистика','Москва',3500000,76,'Интернет-заявка']];const t=templates[Math.floor(Math.random()*templates.length)];const id=Math.max(...state.opps.map(x=>x.id),100)+1;state.opps.unshift({id,title:t[0],company:t[1],region:t[2],amount:t[3],score:t[4],source:t[5],url:'#',status:'Новая',type:'Opportunity',foundAt:Date.now(),summary:'Новая коммерческая возможность найдена по активному поисковому профилю. Демо-карточка показывает работу полного LeadRadar pipeline.'});state.runs.unshift({at:Date.now(),found:7,newCount:1,status:'success'});state.deliveries.unshift({at:Date.now(),channel:'Telegram',status:'sent',opp:id},{at:Date.now()+1,channel:'Email',status:'sent',opp:id});save();closeModal();renderAll();toast('Найдена 1 новая Opportunity')}
+function exportCsv(){const header=['ID','Название','Компания','Регион','Сумма','Score','Статус','Источник'];const rows=state.opps.map(o=>[o.id,o.title,o.company,o.region,o.amount,o.score,o.status,o.source]);const csv=[header,...rows].map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(';')).join('\n');const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='LeadRadar_opportunities.csv';a.click();URL.revokeObjectURL(a.href)}
+statusFilter.innerHTML='<option value="">Все статусы</option>'+STATUSES.map(s=>'<option>'+s+'</option>').join('');
+renderAll();
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 const API='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-api';
+const AI='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-ai';
 const tg=window.Telegram?.WebApp; if(tg){tg.ready();tg.expand();tg.setHeaderColor('#f5fbfb');tg.setBackgroundColor('#f5fbfb')}
 const initData=()=>tg?.initData||''; const el=()=>document.getElementById('screen');
 async function api(path,opt={}){const h={'content-type':'application/json','x-telegram-init-data':initData(),...(opt.headers||{})};const r=await fetch(`${API}/${path}`,{...opt,headers:h});let j={};try{j=await r.json()}catch{};if(!r.ok)throw Object.assign(new Error(j.message||j.detail||j.error||'Ошибка'),{status:r.status,data:j});return j}
@@ -11,7 +12,93 @@ function setup(){el().innerHTML=`<div class="card"><h1>ATOM Lead готов к �
 function register(){el().innerHTML=`<div class="card"><h1>Регистрация</h1><p class="hint">Доступ только сотрудникам с подтверждённой корпоративной почтой <b>@atom.team</b>.</p><label>ФИО</label><input id="full_name" placeholder="Иван Корытник"><label>Корпоративная почта</label><input id="email" type="email" placeholder="name@atom.team"><div class="spacer"></div><button class="btn full" onclick="requestCode()">Отправить письмо для подтверждения</button><div id="regmsg" class="spacer"></div></div>`}
 async function requestCode(){const m=document.getElementById('regmsg');m.innerHTML='';try{const full_name=document.getElementById('full_name').value.trim(),email=document.getElementById('email').value.trim();await api('email-request',{method:'POST',body:JSON.stringify({full_name,email})});m.innerHTML=`<div class="notice">Письмо отправлено на <b>${esc(email)}</b>. Откройте письмо и нажмите ссылку подтверждения. После этого вернитесь в Telegram и заново откройте ATOM Lead.</div>`}catch(e){m.innerHTML=`<div class="error">${esc(errMsg(e))}</div>`}}
 async function verifyCode(){const m=document.getElementById('regmsg');try{const full_name=document.getElementById('full_name').value.trim(),email=document.getElementById('email').value.trim(),code=document.getElementById('code').value.trim();const x=await api('email-verify',{method:'POST',body:JSON.stringify({full_name,email,code})});home(x.user)}catch(e){m.insertAdjacentHTML('beforeend',`<div class="error">${esc(errMsg(e))}</div>`)}}
-function home(user){el().innerHTML=`<div class="card"><h1>Добро пожаловать, ${esc(user.full_name||'')}</h1><p class="hint">${esc(user.corporate_email||'')}</p></div><div class="grid"><button class="btn" onclick="leadForm(false)">➕ Зарегистрировать лид</button><button class="btn" onclick="leadForm(true)">⚡ Быстрый лид</button><button class="btn secondary" onclick="events()">🏢 Мероприятие</button><button class="btn secondary" onclick="searchLeads()">🔎 Найти контакт</button><button class="btn secondary" onclick="listLeads()">📊 Зарегистрированные</button><button class="btn secondary" onclick="profile()">👤 Мой профиль</button></div>`}
+function home(user){el().innerHTML=`<div class="card"><h1>Добро пожаловать, ${esc(user.full_name||'')}</h1><p class="hint">${esc(user.corporate_email||'')}</p></div><div class="grid"><button class="btn" onclick="leadForm(false)">➕ Зарегистрировать лид</button><button class="btn" onclick="leadForm(true)">⚡ Быстрый лид</button><button class="btn" onclick="cardLead()">📷 По фото визитки</button><button class="btn" onclick="voiceLead()">🎙️ Записать голосом</button><button class="btn secondary" onclick="events()">🏢 Мероприятие</button><button class="btn secondary" onclick="searchLeads()">🔎 Найти контакт</button><button class="btn secondary" onclick="listLeads()">📊 Зарегистрированные</button><button class="btn secondary" onclick="profile()">👤 Мой профиль</button></div>`}
+
+async function aiJson(body){
+  const r=await fetch(AI,{method:'POST',headers:{'content-type':'application/json','x-telegram-init-data':initData()},body:JSON.stringify(body)});
+  let j={};try{j=await r.json()}catch{}
+  if(!r.ok)throw new Error(j.detail||j.error||'Ошибка распознавания');
+  return j;
+}
+async function aiForm(form){
+  const r=await fetch(AI,{method:'POST',headers:{'x-telegram-init-data':initData()},body:form});
+  let j={};try{j=await r.json()}catch{}
+  if(!r.ok)throw new Error(j.detail||j.error||'Ошибка распознавания');
+  return j;
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+function applyDraft(d){
+  leadForm(false);
+  l_name.value=d.contact_name||'';
+  l_phone.value=d.phone||'';
+  l_company.value=d.company||'';
+  l_position.value=d.position||'';
+  l_email.value=d.email||'';
+  l_type.value=d.client_type||'';
+  l_potential.value=d.potential_cars??'';
+  l_interest.value=d.interest||'';
+  l_comment.value=d.comment||'';
+  document.querySelectorAll('[data-need]').forEach(x=>x.classList.toggle('active',(d.needs||[]).includes(x.dataset.need)));
+  const extra=[];
+  if(d.website)extra.push('Сайт: '+d.website);
+  if(d.next_step)extra.push('Следующий шаг: '+d.next_step+(d.next_step_date?' ('+d.next_step_date+')':''));
+  if(extra.length&&!l_comment.value.includes(extra[0]))l_comment.value=[l_comment.value,...extra].filter(Boolean).join('\n');
+  const msg=document.getElementById('leadmsg');
+  if(msg)msg.innerHTML='<div class="notice">Данные распознаны автоматически. Проверьте их перед регистрацией лида.</div>';
+}
+function cardLead(){
+  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Я распознаю ФИО, компанию, должность, телефон, e-mail и сайт.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
+}
+async function scanCard(){
+  const m=document.getElementById('cardmsg');const file=document.getElementById('card_file').files?.[0];
+  if(!file){m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';return}
+  m.innerHTML='<div class="notice">Распознаю визитку…</div>';
+  try{
+    const image_base64=await fileToBase64(file);
+    const x=await aiJson({action:'card',image_base64,mime_type:file.type||'image/jpeg'});
+    applyDraft(x.lead||{});
+  }catch(e){m.innerHTML=`<div class="error">${esc(e.message||'Ошибка распознавания')}</div>`}
+}
+let voiceRecorder=null,voiceChunks=[],voiceStream=null;
+function voiceLead(){
+  el().innerHTML=`<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и продиктуйте данные клиента и итоги разговора. Например: «Иван Петров, компания Альфа, директор по закупкам, телефон…, интерес 50 автомобилей, нужен тест-драйв».</p><button id="voice_start" class="btn full" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn secondary full" onclick="stopVoice()" disabled>⏹ Остановить и распознать</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>`;
+}
+async function startVoice(){
+  const m=document.getElementById('voicemsg');
+  try{
+    voiceStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const opts=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?{mimeType:'audio/webm;codecs=opus'}:{};
+    voiceRecorder=new MediaRecorder(voiceStream,opts);voiceChunks=[];
+    voiceRecorder.ondataavailable=e=>{if(e.data?.size)voiceChunks.push(e.data)};
+    voiceRecorder.start();
+    voice_start.disabled=true;voice_stop.disabled=false;
+    m.innerHTML='<div class="notice">🔴 Запись идёт… Говорите данные клиента и результат разговора.</div>';
+  }catch(e){m.innerHTML='<div class="error">Не удалось получить доступ к микрофону. Разрешите микрофон для Telegram и попробуйте снова.</div>'}
+}
+async function stopVoice(){
+  const m=document.getElementById('voicemsg');
+  if(!voiceRecorder||voiceRecorder.state==='inactive')return;
+  voice_stop.disabled=true;m.innerHTML='<div class="notice">Обрабатываю голос…</div>';
+  const done=new Promise(resolve=>voiceRecorder.addEventListener('stop',resolve,{once:true}));
+  voiceRecorder.stop();await done;
+  voiceStream?.getTracks().forEach(t=>t.stop());
+  try{
+    const blob=new Blob(voiceChunks,{type:voiceRecorder.mimeType||'audio/webm'});
+    const form=new FormData();form.append('action','voice');form.append('audio',blob,'lead.webm');
+    const x=await aiForm(form);
+    applyDraft(x.lead||{});
+    const msg=document.getElementById('leadmsg');
+    if(msg&&x.transcript)msg.insertAdjacentHTML('beforeend',`<details><summary>Расшифровка голоса</summary><p class="hint">${esc(x.transcript)}</p></details>`);
+  }catch(e){m.innerHTML=`<div class="error">${esc(e.message||'Ошибка распознавания голоса')}</div>`}
+}
+
 async function profile(){const x=await api('me');el().innerHTML=`<div class="card"><h2>Мой профиль</h2><p><b>${esc(x.user.full_name)}</b></p><p>${esc(x.user.corporate_email)}</p><p class="muted">Telegram ID: ${esc(x.user.telegram_id)}</p><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button></div>`}
 async function homeFromApi(){const x=await api('me');home(x.user)}
 async function events(){const x=await api('events');const cards=(x.events||[]).map(v=>`<button class="btn ${v.id===x.currentEventId?'active':''} full" onclick="selectEvent('${v.id}')">${esc(v.name)}<br><span class="muted">${esc(v.event_date||'')} ${esc(v.city||'')}</span></button>`).join('<div class="spacer"></div>');el().innerHTML=`<div class="card"><h2>Мероприятие</h2>${cards||'<p class="hint">Пока мероприятий нет.</p>'}<div class="spacer"></div><button class="btn full" onclick="newEvent()">＋ Создать мероприятие</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button></div>`}

@@ -109,13 +109,33 @@ function fileToBase64(file){
     const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file);
   });
 }
+async function ensureTesseract(){
+  if(window.Tesseract)return true;
+  const sources=[
+    'https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js',
+    'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js'
+  ];
+  for(const src of sources){
+    try{
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src=src;s.async=true;s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+      if(window.Tesseract)return true;
+    }catch{}
+  }
+  return false;
+}
 function cardLead(){
   el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Распознавание выполняется прямо в телефоне, без платного API.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
 }
 async function scanCard(){
   const m=document.getElementById('cardmsg');const file=document.getElementById('card_file').files?.[0];
   if(!file){m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';return}
-  if(!window.Tesseract){m.innerHTML='<div class="error">Модуль распознавания не загрузился. Закройте и снова откройте ATOM Lead.</div>';return}
+  m.innerHTML='<div class="notice">Загружаю модуль распознавания…</div>';
+  if(!await ensureTesseract()){m.innerHTML='<div class="error">Не удалось загрузить бесплатный OCR-модуль. Проверьте интернет и нажмите «Распознать визитку» ещё раз.</div>';return}
   m.innerHTML='<div class="notice">Распознаю визитку на устройстве… 0%</div>';
   try{
     const result=await Tesseract.recognize(file,'rus+eng',{logger:x=>{if(x.status==='recognizing text')m.innerHTML='<div class="notice">Распознаю визитку… '+Math.round((x.progress||0)*100)+'%</div>'}});

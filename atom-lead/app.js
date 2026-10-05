@@ -14,25 +14,77 @@ async function requestCode(){const m=document.getElementById('regmsg');m.innerHT
 async function verifyCode(){const m=document.getElementById('regmsg');try{const full_name=document.getElementById('full_name').value.trim(),email=document.getElementById('email').value.trim(),code=document.getElementById('code').value.trim();const x=await api('email-verify',{method:'POST',body:JSON.stringify({full_name,email,code})});home(x.user)}catch(e){m.insertAdjacentHTML('beforeend',`<div class="error">${esc(errMsg(e))}</div>`)}}
 function home(user){el().innerHTML=`<div class="card"><h1>Добро пожаловать, ${esc(user.full_name||'')}</h1><p class="hint">${esc(user.corporate_email||'')}</p></div><div class="grid"><button class="btn" onclick="leadForm(false)">➕ Зарегистрировать лид</button><button class="btn" onclick="leadForm(true)">⚡ Быстрый лид</button><button class="btn" onclick="cardLead()">📷 По фото визитки</button><button class="btn" onclick="voiceLead()">🎙️ Записать голосом</button><button class="btn secondary" onclick="events()">🏢 Мероприятие</button><button class="btn secondary" onclick="searchLeads()">🔎 Найти контакт</button><button class="btn secondary" onclick="listLeads()">📊 Зарегистрированные</button><button class="btn secondary" onclick="profile()">👤 Мой профиль</button></div>`}
 
-async function aiJson(body){
-  const r=await fetch(AI,{method:'POST',headers:{'content-type':'application/json','x-telegram-init-data':initData()},body:JSON.stringify(body)});
-  let j={};try{j=await r.json()}catch{}
-  if(!r.ok)throw new Error(j.detail||j.error||'Ошибка распознавания');
-  return j;
+
+function normalizePhoneLocal(v){
+  let d=String(v||'').replace(/\D/g,'');
+  if(d.length===10)d='8'+d;
+  if(d.length===11&&d.startsWith('7'))d='8'+d.slice(1);
+  return d.length===11&&d.startsWith('8')?d:'';
 }
-async function aiForm(form){
-  const r=await fetch(AI,{method:'POST',headers:{'x-telegram-init-data':initData()},body:form});
-  let j={};try{j=await r.json()}catch{}
-  if(!r.ok)throw new Error(j.detail||j.error||'Ошибка распознавания');
-  return j;
+function firstMatch(text,re){
+  const m=String(text||'').match(re);
+  return m?String(m[1]||m[0]||'').trim():'';
 }
-function fileToBase64(file){
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
-    reader.onerror=reject;
-    reader.readAsDataURL(file);
-  });
+function smartLines(text){
+  return String(text||'').split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+function parseLeadText(text,source='voice'){
+  const raw=String(text||'').trim();
+  const lines=smartLines(raw);
+  const joined=' '+raw.replace(/\s+/g,' ')+' ';
+  const phoneRaw=firstMatch(joined,/(?:\+?7|8)[\s\-\(\)]*\d{3}[\s\-\(\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/);
+  const phone=normalizePhoneLocal(phoneRaw);
+  const email=firstMatch(joined,/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i).toLowerCase();
+  const website=firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё-]+(?:\.[a-z0-9а-яё-]+)+(?:\/[^\s]*)?)/i);
+  const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
+  const potential=potentialM?Number(potentialM[1]):null;
+
+  let company='';
+  const companyLine=lines.find(x=>/\b(?:ООО|АО|ПАО|ИП|ГК|ГБУ|ГУП|МУП|ФГУП|LLC|JSC)\b/i.test(x));
+  if(companyLine) company=companyLine;
+  if(!company) company=firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
+
+  const roleRe=/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|директор|руководитель|менеджер)/i;
+  let position='';
+  const roleLine=lines.find(x=>roleRe.test(x));
+  if(roleLine) position=roleLine;
+
+  let contact='';
+  contact=firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
+  if(!contact){
+    const banned=/(ооо|ао|пао|директор|руководитель|менеджер|тел|моб|email|e-mail|www|http|компания|отдел)/i;
+    const cand=lines.find(x=>!banned.test(x)&&/^[А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2}$/.test(x));
+    if(cand) contact=cand;
+  }
+
+  let client_type='';
+  if(/таксопарк|такси парк|taxi/i.test(joined))client_type='Таксопарк';
+  else if(/каршеринг|carsharing/i.test(joined))client_type='Каршеринг';
+  else if(/лизинг|leasing/i.test(joined))client_type='Лизинговая компания';
+  else if(/государствен|госкомпан|гбу|гуп|фгуп/i.test(joined))client_type='Государственная компания';
+  else if(/партн[её]р/i.test(joined))client_type='Партнёр';
+
+  const needs=[];
+  const add=n=>{if(!needs.includes(n))needs.push(n)};
+  if(/тест[- ]?драйв/i.test(joined))add('Тест-драйв');
+  if(/лизинг/i.test(joined))add('Лизинг');
+  if(/каршеринг/i.test(joined))add('Каршеринг');
+  if(/такси|таксопарк/i.test(joined))add('Такси');
+  if(/партн[её]р/i.test(joined))add('Партнёрство');
+  if(/автопарк|корпоративн.*парк/i.test(joined))add('Корпоративный автопарк');
+  if(/купить|покупк|закупк|приобрест/i.test(joined))add('Покупка автомобилей');
+
+  let interest='';
+  if(/высок(?:ий|ая).*интерес|горяч/i.test(joined))interest='Высокий';
+  else if(/средн(?:ий|яя).*интерес/i.test(joined))interest='Средний';
+  else if(/предварительн/i.test(joined))interest='Предварительный';
+
+  let next='';
+  const nextM=joined.match(/(?:следующий шаг|договорились|нужно|надо|перезвонить|связаться)\s*[:\-]?\s*([^.;]{3,120})/i);
+  if(nextM)next=nextM[1].trim();
+
+  const comment=(source==='card'?'Распознано с визитки':'Распознано голосом')+(raw?'\n'+raw:'');
+  return {contact_name:contact,company,position,phone,email,website,client_type,needs,potential_cars:potential,potential_range:'',interest,comment,next_step:next,next_step_date:''};
 }
 function applyDraft(d){
   leadForm(false);
@@ -49,54 +101,63 @@ function applyDraft(d){
   const extra=[];
   if(d.website)extra.push('Сайт: '+d.website);
   if(d.next_step)extra.push('Следующий шаг: '+d.next_step+(d.next_step_date?' ('+d.next_step_date+')':''));
-  if(extra.length&&!l_comment.value.includes(extra[0]))l_comment.value=[l_comment.value,...extra].filter(Boolean).join('\n');
+  if(extra.length)l_comment.value=[l_comment.value,...extra].filter(Boolean).join('\n');
   const msg=document.getElementById('leadmsg');
-  if(msg)msg.innerHTML='<div class="notice">Данные распознаны автоматически. Проверьте их перед регистрацией лида.</div>';
+  if(msg)msg.innerHTML='<div class="notice">Данные распознаны без платного API. Проверьте поля перед регистрацией.</div>';
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file);
+  });
 }
 function cardLead(){
-  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Я распознаю ФИО, компанию, должность, телефон, e-mail и сайт.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
+  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Распознавание выполняется прямо в телефоне, без платного API.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
 }
 async function scanCard(){
   const m=document.getElementById('cardmsg');const file=document.getElementById('card_file').files?.[0];
   if(!file){m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';return}
-  m.innerHTML='<div class="notice">Распознаю визитку…</div>';
+  if(!window.Tesseract){m.innerHTML='<div class="error">Модуль распознавания не загрузился. Закройте и снова откройте ATOM Lead.</div>';return}
+  m.innerHTML='<div class="notice">Распознаю визитку на устройстве… 0%</div>';
   try{
-    const image_base64=await fileToBase64(file);
-    const x=await aiJson({action:'card',image_base64,mime_type:file.type||'image/jpeg'});
-    applyDraft(x.lead||{});
+    const result=await Tesseract.recognize(file,'rus+eng',{logger:x=>{if(x.status==='recognizing text')m.innerHTML='<div class="notice">Распознаю визитку… '+Math.round((x.progress||0)*100)+'%</div>'}});
+    const text=String(result?.data?.text||'').trim();
+    if(!text)throw new Error('Текст на визитке не распознан');
+    applyDraft(parseLeadText(text,'card'));
   }catch(e){m.innerHTML=`<div class="error">${esc(e.message||'Ошибка распознавания')}</div>`}
 }
-let voiceRecorder=null,voiceChunks=[],voiceStream=null;
+let speechRec=null,speechFinal='';
 function voiceLead(){
-  el().innerHTML=`<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и продиктуйте данные клиента и итоги разговора. Например: «Иван Петров, компания Альфа, директор по закупкам, телефон…, интерес 50 автомобилей, нужен тест-драйв».</p><button id="voice_start" class="btn full" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn secondary full" onclick="stopVoice()" disabled>⏹ Остановить и распознать</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>`;
+  el().innerHTML=`<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и продиктуйте данные. Распознавание использует функцию телефона/браузера и не расходует API-кредиты.</p><button id="voice_start" class="btn full" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn secondary full" onclick="stopVoice()" disabled>⏹ Остановить</button><div class="spacer"></div><textarea id="voice_text" placeholder="Если голосовой ввод не поддерживается, нажмите микрофон на клавиатуре телефона и продиктуйте сюда"></textarea><div class="spacer"></div><button class="btn full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>`;
 }
-async function startVoice(){
+function startVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   const m=document.getElementById('voicemsg');
+  if(!SR){
+    m.innerHTML='<div class="notice">В этом Telegram голосовое распознавание браузера недоступно. Нажмите поле ниже, откройте клавиатуру и используйте микрофон клавиатуры — это тоже без API-кредитов.</div>';
+    document.getElementById('voice_text').focus();return;
+  }
   try{
-    voiceStream=await navigator.mediaDevices.getUserMedia({audio:true});
-    const opts=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?{mimeType:'audio/webm;codecs=opus'}:{};
-    voiceRecorder=new MediaRecorder(voiceStream,opts);voiceChunks=[];
-    voiceRecorder.ondataavailable=e=>{if(e.data?.size)voiceChunks.push(e.data)};
-    voiceRecorder.start();
-    voice_start.disabled=true;voice_stop.disabled=false;
-    m.innerHTML='<div class="notice">🔴 Запись идёт… Говорите данные клиента и результат разговора.</div>';
-  }catch(e){m.innerHTML='<div class="error">Не удалось получить доступ к микрофону. Разрешите микрофон для Telegram и попробуйте снова.</div>'}
+    speechFinal='';speechRec=new SR();speechRec.lang='ru-RU';speechRec.continuous=true;speechRec.interimResults=true;
+    speechRec.onresult=e=>{
+      let interim='';
+      for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)speechFinal+=t+' ';else interim+=t}
+      document.getElementById('voice_text').value=(speechFinal+interim).trim();
+    };
+    speechRec.onerror=e=>{m.innerHTML='<div class="error">Голосовой ввод не сработал. Используйте микрофон клавиатуры в поле ниже.</div>'};
+    speechRec.onend=()=>{voice_start.disabled=false;voice_stop.disabled=true};
+    speechRec.start();voice_start.disabled=true;voice_stop.disabled=false;
+    m.innerHTML='<div class="notice">🔴 Говорите данные клиента. После окончания нажмите «Остановить».</div>';
+  }catch(e){m.innerHTML='<div class="error">Не удалось запустить распознавание. Используйте микрофон клавиатуры.</div>'}
 }
-async function stopVoice(){
-  const m=document.getElementById('voicemsg');
-  if(!voiceRecorder||voiceRecorder.state==='inactive')return;
-  voice_stop.disabled=true;m.innerHTML='<div class="notice">Обрабатываю голос…</div>';
-  const done=new Promise(resolve=>voiceRecorder.addEventListener('stop',resolve,{once:true}));
-  voiceRecorder.stop();await done;
-  voiceStream?.getTracks().forEach(t=>t.stop());
-  try{
-    const blob=new Blob(voiceChunks,{type:voiceRecorder.mimeType||'audio/webm'});
-    const form=new FormData();form.append('action','voice');form.append('audio',blob,'lead.webm');
-    const x=await aiForm(form);
-    applyDraft(x.lead||{});
-    const msg=document.getElementById('leadmsg');
-    if(msg&&x.transcript)msg.insertAdjacentHTML('beforeend',`<details><summary>Расшифровка голоса</summary><p class="hint">${esc(x.transcript)}</p></details>`);
-  }catch(e){m.innerHTML=`<div class="error">${esc(e.message||'Ошибка распознавания голоса')}</div>`}
+function stopVoice(){
+  try{speechRec?.stop()}catch{}
+  voice_start.disabled=false;voice_stop.disabled=true;
+  const m=document.getElementById('voicemsg');if(m)m.innerHTML='<div class="notice">Текст готов. Нажмите «Заполнить лид из текста».</div>';
+}
+function voiceTextToLead(){
+  const t=document.getElementById('voice_text').value.trim();
+  if(!t){document.getElementById('voicemsg').innerHTML='<div class="error">Сначала продиктуйте или введите текст.</div>';return}
+  applyDraft(parseLeadText(t,'voice'));
 }
 
 async function profile(){const x=await api('me');el().innerHTML=`<div class="card"><h2>Мой профиль</h2><p><b>${esc(x.user.full_name)}</b></p><p>${esc(x.user.corporate_email)}</p><p class="muted">Telegram ID: ${esc(x.user.telegram_id)}</p><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button></div>`}

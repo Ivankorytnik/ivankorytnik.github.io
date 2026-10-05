@@ -1,5 +1,4 @@
 const API='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-api';
-const AI='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-ai';
 const tg=window.Telegram?.WebApp; if(tg){tg.ready();tg.expand();tg.setHeaderColor('#f5fbfb');tg.setBackgroundColor('#f5fbfb')}
 const initData=()=>tg?.initData||''; const el=()=>document.getElementById('screen');
 async function api(path,opt={}){const h={'content-type':'application/json','x-telegram-init-data':initData(),...(opt.headers||{})};const r=await fetch(`${API}/${path}`,{...opt,headers:h});let j={};try{j=await r.json()}catch{};if(!r.ok)throw Object.assign(new Error(j.message||j.detail||j.error||'Ошибка'),{status:r.status,data:j});return j}

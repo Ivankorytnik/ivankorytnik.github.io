@@ -1,4 +1,5 @@
 const API='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-api';
+const CARD_OCR_API='https://ytdacypygsfalkixhemj.supabase.co/functions/v1/atom-lead-card-ocr';
 const tg=window.Telegram?.WebApp; if(tg){tg.ready();tg.expand();tg.setHeaderColor('#f5fbfb');tg.setBackgroundColor('#f5fbfb')}
 const initData=()=>tg?.initData||''; const el=()=>document.getElementById('screen');
 let currentRecognizedText='';
@@ -883,8 +884,8 @@ async function startCardCamera(){
       audio:false,
       video:{
         facingMode:{ideal:'environment'},
-        width:{ideal:1920},
-        height:{ideal:1080}
+        width:{ideal:2560},
+        height:{ideal:1440}
       }
     });
     cardCameraStream=stream;
@@ -898,6 +899,9 @@ async function startCardCamera(){
       const caps=track.getCapabilities?.()||{};
       const advanced=[];
       if(Array.isArray(caps.focusMode)&&caps.focusMode.includes('continuous'))advanced.push({focusMode:'continuous'});
+      if(Array.isArray(caps.exposureMode)&&caps.exposureMode.includes('continuous'))advanced.push({exposureMode:'continuous'});
+      if(Array.isArray(caps.whiteBalanceMode)&&caps.whiteBalanceMode.includes('continuous'))advanced.push({whiteBalanceMode:'continuous'});
+      if(caps.zoom&&typeof caps.zoom.min==='number'&&typeof caps.zoom.max==='number')advanced.push({zoom:Math.min(caps.zoom.max,Math.max(caps.zoom.min,1.15))});
       if(advanced.length)await track.applyConstraints({advanced});
     }catch{}
 
@@ -982,23 +986,134 @@ async function captureCardPhoto(){
     if(msg)msg.innerHTML='<div class="error">'+esc(e.message||'Не удалось сделать снимок')+'</div>';
   }
 }
+function canvasForAi(src){
+  const maxSide=1800;
+  const scale=Math.min(1,maxSide/Math.max(src.width,src.height));
+  const out=document.createElement('canvas');
+  out.width=Math.max(1,Math.round(src.width*scale));
+  out.height=Math.max(1,Math.round(src.height*scale));
+  const ctx=out.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(src,0,0,out.width,out.height);
+  return out;
+}
+function cardImageQuality(canvas){
+  try{
+    const sample=document.createElement('canvas');
+    const max=420,scale=Math.min(1,max/Math.max(canvas.width,canvas.height));
+    sample.width=Math.max(1,Math.round(canvas.width*scale));
+    sample.height=Math.max(1,Math.round(canvas.height*scale));
+    const ctx=sample.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(canvas,0,0,sample.width,sample.height);
+    const d=ctx.getImageData(0,0,sample.width,sample.height).data;
+    let light=0,contrast=0,edges=0,count=0;
+    const gray=new Float32Array(sample.width*sample.height);
+    for(let i=0,p=0;i<d.length;i+=4,p++){
+      const g=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+      gray[p]=g;light+=g;count++;
+    }
+    light/=Math.max(1,count);
+    for(let i=0;i<gray.length;i++){const x=gray[i]-light;contrast+=x*x}
+    contrast=Math.sqrt(contrast/Math.max(1,count));
+    for(let y=1;y<sample.height-1;y+=2){
+      for(let x=1;x<sample.width-1;x+=2){
+        const p=y*sample.width+x;
+        const lap=4*gray[p]-gray[p-1]-gray[p+1]-gray[p-sample.width]-gray[p+sample.width];
+        edges+=lap*lap;
+      }
+    }
+    edges/=Math.max(1,Math.floor((sample.width-2)*(sample.height-2)/4));
+    return {light,contrast,sharpness:edges};
+  }catch{return {light:128,contrast:50,sharpness:999}}
+}
+async function aiRecognizeCard(canvas,localText){
+  const aiCanvas=canvasForAi(canvas);
+  const image=aiCanvas.toDataURL('image/jpeg',.88);
+  const r=await fetch(CARD_OCR_API,{
+    method:'POST',
+    headers:{'content-type':'application/json','x-telegram-init-data':initData()},
+    body:JSON.stringify({image_data_url:image,local_ocr:localText||''})
+  });
+  let j={};try{j=await r.json()}catch{}
+  if(!r.ok||!j?.ok)throw new Error(j?.detail||j?.error||'AI recognition failed');
+  return j.result||{};
+}
+function chooseCardField(localValue,aiValue,confidence,min=.70){
+  const l=String(localValue||'').trim(),a=String(aiValue||'').trim(),c=Number(confidence||0);
+  if(!a)return l;
+  if(!l)return c>=.50?a:l;
+  if(c>=min)return a;
+  return l;
+}
+function mergeCardAiDraft(localDraft,ai){
+  const c=ai?.confidence||{};
+  const d={...(localDraft||{})};
+  d.contact_name=chooseCardField(d.contact_name,ai.contact_name,c.contact_name,.68);
+  d.company=chooseCardField(d.company,ai.company,c.company,.68);
+  d.position=chooseCardField(d.position,ai.position,c.position,.68);
+  d.phone=chooseCardField(d.phone,normalizePhoneLocal(ai.phone)||ai.phone,c.phone,.78);
+  d.email=chooseCardField(d.email,normalizeEmailOcr(ai.email),c.email,.78);
+  d.website=chooseCardField(d.website,normalizeWebsiteOcr(ai.website),c.website,.70);
+  d._field_confidence=c;
+  d._ai_warnings=Array.isArray(ai?.warnings)?ai.warnings:[];
+  d._ai_used=true;
+  return d;
+}
+function confidenceSummaryHtml(d){
+  const c=d?._field_confidence||{};
+  const labels=[['ФИО','contact_name'],['Компания','company'],['Должность','position'],['Телефон','phone'],['E-mail','email']];
+  const vals=labels.filter(([,k])=>Number(c[k])>0).map(([label,k])=>{
+    const n=Number(c[k]);const cls=n>=.82?'good':n>=.62?'mid':'low';
+    return '<span class="ocr-confidence '+cls+'">'+esc(label)+' '+Math.round(n*100)+'%</span>';
+  });
+  if(!vals.length)return '';
+  return '<div class="ocr-confidence-row">'+vals.join('')+'</div>';
+}
 async function recognizeCapturedCard(canvas){
   const msg=document.getElementById('cardmsg');
+  const q=cardImageQuality(canvas);
+  if(q.light<52)throw new Error('Фото слишком тёмное. Добавьте света и снимите визитку ещё раз.');
+  if(q.light>235&&q.contrast<24)throw new Error('На визитке сильный блик. Измените угол камеры и снимите ещё раз.');
+  if(q.sharpness<55)throw new Error('Фото получилось размытым. Держите телефон неподвижно и снимите ещё раз.');
+
   const ocr=await ocrBusinessCard(canvas,function(t){
     if(msg)msg.innerHTML='<div class="notice">'+esc(t)+'</div>';
   });
   if(!ocr.text&&!ocr.qrRaw)throw new Error('Текст на визитке не распознан');
   let draft=parseLeadText(ocr.text||'','card',ocr.meta||[]);
+  let ai=null;
+  try{
+    if(msg)msg.innerHTML='<div class="notice">Проверяю ФИО, компанию и должность по самой фотографии…</div>';
+    ai=await aiRecognizeCard(canvas,ocr.text||'');
+    draft=mergeCardAiDraft(draft,ai);
+  }catch(e){
+    draft._ai_error=true;
+  }
   if(ocr.qrRaw){
     draft=mergeDraft(draft,parseVCardText(ocr.qrRaw));
     draft._qr_found=true;
   }
-  draft._raw_ocr=usefulCardLines(ocr.text||'').join('\n');
+  const localRaw=usefulCardLines(ocr.text||'').join('\n');
+  const aiRaw=String(ai?.raw_text||'').trim();
+  draft._raw_ocr=aiRaw||localRaw;
+  draft._recognized_text=[aiRaw,localRaw].filter(Boolean).join('\n--- OCR ---\n');
   draft._ocr_confidence=ocr.confidence;
   applyDraft(draft);
   const leadMsg=document.getElementById('leadmsg');
-  if(leadMsg&&draft._qr_found){
-    leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: точные контактные данные взяты из QR.</div>');
+  if(leadMsg){
+    const summary=confidenceSummaryHtml(draft);
+    if(summary)leadMsg.insertAdjacentHTML('beforeend',summary);
+    if(draft._ai_warnings?.length){
+      leadMsg.insertAdjacentHTML('beforeend','<div class="notice"><b>Проверьте:</b> '+draft._ai_warnings.map(esc).join('; ')+'</div>');
+    }
+    if(draft._qr_found){
+      leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: точные контактные данные взяты из QR.</div>');
+    }else if(draft._ai_used){
+      leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Текст проверен вторым способом: локальный OCR + анализ фотографии.</div>');
+    }else if(draft._ai_error){
+      leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">⚠️ Серверная проверка временно недоступна. Использован локальный OCR.</div>');
+    }
   }
 }
 window.addEventListener('pagehide',function(){

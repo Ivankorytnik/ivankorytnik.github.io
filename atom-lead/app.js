@@ -128,21 +128,158 @@ async function ensureTesseract(){
   }
   return false;
 }
+
+async function imageToCanvas(file){
+  let source=null,w=0,h=0,url='';
+  try{
+    source=await createImageBitmap(file,{imageOrientation:'from-image'});
+    w=source.width;h=source.height;
+  }catch(e){
+    url=URL.createObjectURL(file);
+    source=await new Promise(function(resolve,reject){
+      const im=new Image();
+      im.onload=function(){resolve(im)};
+      im.onerror=reject;
+      im.src=url;
+    });
+    w=source.naturalWidth||source.width;
+    h=source.naturalHeight||source.height;
+  }
+  const mx=Math.round(w*0.015),my=Math.round(h*0.015);
+  const cw=Math.max(1,w-mx*2),ch=Math.max(1,h-my*2);
+  const longest=Math.max(cw,ch);
+  const target=Math.min(2600,Math.max(1600,longest));
+  const scale=target/longest;
+  const border=28;
+  const out=document.createElement('canvas');
+  out.width=Math.round(cw*scale)+border*2;
+  out.height=Math.round(ch*scale)+border*2;
+  const ctx=out.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(source,mx,my,cw,ch,border,border,out.width-border*2,out.height-border*2);
+  try{source.close&&source.close()}catch(e){}
+  if(url)URL.revokeObjectURL(url);
+  return out;
+}
+function enhanceCanvas(src,binary){
+  const out=document.createElement('canvas');
+  out.width=src.width;out.height=src.height;
+  const ctx=out.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(src,0,0);
+  const img=ctx.getImageData(0,0,out.width,out.height),d=img.data;
+  const hist=new Uint32Array(256);
+  let sum=0,count=0;
+  for(let i=0;i<d.length;i+=4){
+    const g=Math.round(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]);
+    hist[g]++;sum+=g;count++;
+  }
+  let a=0,lo=0,hi=255;
+  const low=count*0.02,high=count*0.98;
+  for(let i=0;i<256;i++){a+=hist[i];if(a>=low){lo=i;break}}
+  a=0;for(let i=0;i<256;i++){a+=hist[i];if(a>=high){hi=i;break}}
+  if(hi-lo<70){lo=Math.max(0,lo-30);hi=Math.min(255,hi+30)}
+  const invert=(sum/count)<105;
+  const gray=new Uint8Array(count);
+  let p=0;
+  for(let i=0;i<d.length;i+=4){
+    let g=Math.round(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]);
+    g=Math.max(0,Math.min(255,Math.round((g-lo)*255/Math.max(1,hi-lo))));
+    if(invert)g=255-g;
+    gray[p++]=g;
+  }
+  let threshold=165;
+  if(binary){
+    const hh=new Uint32Array(256);for(const g of gray)hh[g]++;
+    let total=gray.length,sumAll=0;for(let i=0;i<256;i++)sumAll+=i*hh[i];
+    let sumB=0,wB=0,maxVar=0;
+    for(let i=0;i<256;i++){
+      wB+=hh[i];if(!wB)continue;
+      const wF=total-wB;if(!wF)break;
+      sumB+=i*hh[i];
+      const mB=sumB/wB,mF=(sumAll-sumB)/wF;
+      const v=wB*wF*(mB-mF)*(mB-mF);
+      if(v>maxVar){maxVar=v;threshold=i}
+    }
+  }
+  p=0;
+  for(let i=0;i<d.length;i+=4){
+    let g=gray[p++];
+    if(binary)g=g>threshold?255:0;
+    d[i]=d[i+1]=d[i+2]=g;d[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  return out;
+}
+function cleanOcrText(text){
+  const seen=new Set(),out=[];
+  String(text||'').split(/\r?\n/).forEach(function(line){
+    line=line.replace(/\s+/g,' ').trim();
+    if(line.length<2)return;
+    const good=(line.match(/[A-Za-zА-Яа-яЁё0-9@.+()\-]/g)||[]).length;
+    const bad=(line.match(/[^\sA-Za-zА-Яа-яЁё0-9@.,:+()\-\/&«»"'№]/g)||[]).length;
+    if(good/Math.max(1,line.length)<0.55||bad/Math.max(1,line.length)>0.18)return;
+    const key=line.toLowerCase().replace(/[^a-zа-яё0-9@]+/gi,'');
+    if(key.length<2||seen.has(key))return;
+    seen.add(key);out.push(line);
+  });
+  return out.join('\n');
+}
+function mergeOcrTexts(a,b){
+  return cleanOcrText(cleanOcrText(a)+'\n'+cleanOcrText(b));
+}
+async function ocrBusinessCard(file,progress){
+  if(!await ensureTesseract())throw new Error('OCR-модуль не загрузился');
+  progress('Подготавливаю фото…');
+  const base=await imageToCanvas(file);
+  const gray=enhanceCanvas(base,false);
+  const bw=enhanceCanvas(base,true);
+  let worker=null;
+  try{
+    worker=await Tesseract.createWorker(['rus','eng'],1,{
+      logger:function(x){
+        if(x.status==='recognizing text')progress('Распознаю текст… '+Math.round((x.progress||0)*100)+'%');
+        else if(/loading|initializing/i.test(x.status||''))progress('Загружаю языковую модель…');
+      }
+    });
+    await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1',user_defined_dpi:'300'});
+    const r1=await worker.recognize(gray,{rotateAuto:true});
+    progress('Проверяю контрастный вариант…');
+    await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});
+    const r2=await worker.recognize(bw,{rotateAuto:true});
+    return {
+      text:mergeOcrTexts(r1&&r1.data?r1.data.text:'',r2&&r2.data?r2.data.text:''),
+      confidence:Math.max(Number(r1&&r1.data?r1.data.confidence:0),Number(r2&&r2.data?r2.data.confidence:0))
+    };
+  }finally{
+    try{if(worker)await worker.terminate()}catch(e){}
+  }
+}
+
 function cardLead(){
   el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Распознавание выполняется прямо в телефоне, без платного API.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
 }
+
 async function scanCard(){
-  const m=document.getElementById('cardmsg');const file=document.getElementById('card_file').files?.[0];
-  if(!file){m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';return}
-  m.innerHTML='<div class="notice">Загружаю модуль распознавания…</div>';
-  if(!await ensureTesseract()){m.innerHTML='<div class="error">Не удалось загрузить бесплатный OCR-модуль. Проверьте интернет и нажмите «Распознать визитку» ещё раз.</div>';return}
-  m.innerHTML='<div class="notice">Распознаю визитку на устройстве… 0%</div>';
+  const m=document.getElementById('cardmsg');
+  const file=document.getElementById('card_file').files?.[0];
+  if(!file){
+    m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';
+    return;
+  }
+  m.innerHTML='<div class="notice">Подготавливаю распознавание…</div>';
   try{
-    const result=await Tesseract.recognize(file,'rus+eng',{logger:x=>{if(x.status==='recognizing text')m.innerHTML='<div class="notice">Распознаю визитку… '+Math.round((x.progress||0)*100)+'%</div>'}});
-    const text=String(result?.data?.text||'').trim();
-    if(!text)throw new Error('Текст на визитке не распознан');
-    applyDraft(parseLeadText(text,'card'));
-  }catch(e){m.innerHTML=`<div class="error">${esc(e.message||'Ошибка распознавания')}</div>`}
+    const ocr=await ocrBusinessCard(file,function(t){
+      m.innerHTML='<div class="notice">'+esc(t)+'</div>';
+    });
+    if(!ocr.text)throw new Error('Текст на визитке не распознан');
+    const draft=parseLeadText(ocr.text,'card');
+    draft._raw_ocr=ocr.text;
+    draft._ocr_confidence=ocr.confidence;
+    applyDraft(draft);
+  }catch(e){
+    m.innerHTML='<div class="error">'+esc(e.message||'Ошибка распознавания')+'</div>';
+  }
 }
 let speechRec=null,speechFinal='';
 function voiceLead(){

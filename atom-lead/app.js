@@ -361,13 +361,22 @@ function parseVoiceSegments(raw){
   }
   return out;
 }
+function translitRuLatin(v){
+  const map={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'ts',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+  return String(v||'').replace(/[а-яё]/gi,ch=>{
+    const low=ch.toLowerCase(),r=map[low]??ch;
+    return ch===ch.toUpperCase()?r.toUpperCase():r;
+  });
+}
 function normalizeSpokenEmail(v){
   let s=String(v||'').toLowerCase()
-    .replace(/\b(?:собака|собачка|at)\b/g,'@')
+    .replace(/\b(?:собака|собачка|эт|at)\b/g,'@')
     .replace(/\b(?:точка|dot)\b/g,'.')
     .replace(/\b(?:нижнее\s+подчеркивание|нижнее\s+подчёркивание|underscore)\b/g,'_')
     .replace(/\b(?:дефис|тире|dash)\b/g,'-')
+    .replace(/\bатом\s+(?:тим|team)\b/g,'atom.team')
     .replace(/\s+/g,'');
+  s=translitRuLatin(s);
   return normalizeEmailOcr(s);
 }
 function simpleRussianNumber(v){
@@ -385,8 +394,50 @@ function simpleRussianNumber(v){
   }
   return found&&total<=9999?total:null;
 }
+
+function spokenPhoneDigits(v){
+  const units={ноль:'0',нуль:'0',один:'1',одна:'1',два:'2',две:'2',три:'3',четыре:'4',пять:'5',шесть:'6',семь:'7',восемь:'8',девять:'9'};
+  const teens={десять:'10',одиннадцать:'11',двенадцать:'12',тринадцать:'13',четырнадцать:'14',пятнадцать:'15',шестнадцать:'16',семнадцать:'17',восемнадцать:'18',девятнадцать:'19'};
+  const tens={двадцать:'20',тридцать:'30',сорок:'40',пятьдесят:'50',шестьдесят:'60',семьдесят:'70',восемьдесят:'80',девяносто:'90'};
+  const hundreds={сто:'100',двести:'200',триста:'300',четыреста:'400',пятьсот:'500',шестьсот:'600',семьсот:'700',восемьсот:'800',девятьсот:'900'};
+  const src=String(v||'').toLowerCase().replace(/ё/g,'е')
+    .replace(/[()\-–—,+]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+  const tokens=src.split(' ').filter(Boolean);
+  const groups=[];
+  for(let i=0;i<tokens.length;){
+    const t=tokens[i];
+    if(/^\d+$/.test(t)){groups.push(t);i++;continue}
+    if(hundreds[t]){
+      let n=Number(hundreds[t]);i++;
+      if(teens[tokens[i]]){n+=Number(teens[tokens[i]]);i++}
+      else if(tens[tokens[i]]){n+=Number(tens[tokens[i]]);i++;if(units[tokens[i]]){n+=Number(units[tokens[i]]);i++}}
+      else if(units[tokens[i]]){n+=Number(units[tokens[i]]);i++}
+      groups.push(String(n));continue;
+    }
+    if(teens[t]){groups.push(teens[t]);i++;continue}
+    if(tens[t]){
+      let n=Number(tens[t]);i++;
+      if(units[tokens[i]]){n+=Number(units[tokens[i]]);i++}
+      groups.push(String(n));continue;
+    }
+    if(units[t]){groups.push(units[t]);i++;continue}
+    i++;
+  }
+  return groups.join('');
+}
+function phoneFromSpokenWords(v){
+  const d=spokenPhoneDigits(v);
+  if(!d)return '';
+  if(d.length===11)return normalizePhoneLocal(d);
+  if(d.length===10)return normalizePhoneLocal(d);
+  const m=d.match(/(?:7|8)?\d{10}$/);
+  return m?normalizePhoneLocal(m[0]):'';
+}
+
 function voicePhoneCandidate(raw,seg){
-  const fromSeg=normalizePhoneLocal(seg||'');
+  const fromSeg=normalizePhoneLocal(seg||'')||phoneFromSpokenWords(seg||'');
   if(fromSeg)return fromSeg;
   const compact=String(raw||'')
     .replace(/[ОOоo]/g,'0')
@@ -395,7 +446,9 @@ function voicePhoneCandidate(raw,seg){
   if(m)return normalizePhoneLocal(m[0]);
   const digits=compact.replace(/\D/g,'');
   const dm=digits.match(/(?:7|8)?\d{10}/);
-  return dm?normalizePhoneLocal(dm[0]):'';
+  if(dm)return normalizePhoneLocal(dm[0]);
+  const spoken=phoneFromSpokenWords(raw);
+  return spoken||'';
 }
 function mapVoiceInterest(v){
   const s=String(v||'').toLowerCase();
@@ -404,6 +457,32 @@ function mapVoiceInterest(v){
   if(/предвар|низк|холодн/.test(s))return 'Предварительный';
   if(/не определ|не знаю|непонят/.test(s))return 'Не определён';
   return '';
+}
+
+
+function trimAtVoiceBoundary(v){
+  return cleanVoiceValue(String(v||'')
+    .split(/\b(?:телефон|мобильный|почта|email|e-mail|электронная\s+почта|сайт|website|потребност[ьи]|потенциал|интерес|комментарий|примечание|следующий\s+шаг|договорились)\b/i)[0]);
+}
+function inferVoiceIdentity(raw){
+  const s=String(raw||'').replace(/\s+/g,' ').trim();
+  const out={contact_name:'',company:'',position:''};
+
+  let m=s.match(/(?:меня зовут|контакт(?:ное лицо)?|представитель)\s+([А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+(?:\s+[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+){1,2})/);
+  if(m)out.contact_name=cleanVoiceValue(m[1]);
+
+  m=s.match(/(?:из компании|компания|организация|работаю в|работает в|представляю|представляет)\s+["«]?(.{2,90}?)(?=\s+(?:должность|позиция|роль|телефон|мобильный|почта|email|сайт|потребност|потенциал|интерес|следующий шаг|директор|руководител|начальник|менеджер|ceo|cfo|coo|cto)\b|$)/i);
+  if(m)out.company=trimAtVoiceBoundary(m[1]).replace(/[»"]$/,'').trim();
+
+  m=s.match(/((?:генеральн|коммерческ|исполнительн|финансов|техническ)\w*\s+директор|директор(?:\s+по\s+[А-Яа-яA-Za-z -]{2,50})?|руководител\w*(?:\s+[А-Яа-яA-Za-z -]{2,50})?|начальник(?:\s+[А-Яа-яA-Za-z -]{2,50})?|менеджер(?:\s+[А-Яа-яA-Za-z -]{2,50})?|CEO|CFO|COO|CTO|CMO|Head of [A-Za-z -]+|Director|Manager)/i);
+  if(m)out.position=trimAtVoiceBoundary(m[1]);
+
+  if(!out.contact_name){
+    const prefix=s.split(/\b(?:компания|организация|из компании|работаю в|работает в|должность|позиция|роль|телефон|почта|email|потребност|потенциал|интерес)\b/i)[0];
+    const nm=prefix.match(/([А-ЯЁ][а-яё-]+\s+[А-ЯЁ][а-яё-]+(?:\s+[А-ЯЁ][а-яё-]+)?)/);
+    if(nm)out.contact_name=nm[1];
+  }
+  return out;
 }
 
 function parseLeadText(text,source='voice',metaLines=[]){
@@ -426,9 +505,10 @@ function parseLeadText(text,source='voice',metaLines=[]){
     position=bestCardPosition(lines,metaLines);
     company=bestCardCompany(lines,metaLines,contact,position);
   }else{
-    contact=cleanVoiceValue(voiceSeg.contact_name)||firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
-    company=cleanVoiceValue(voiceSeg.company)||firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
-    position=cleanVoiceValue(voiceSeg.position)||firstMatch(joined,/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|CTO|директор|руководитель|менеджер)/i);
+    const inferred=inferVoiceIdentity(raw);
+    contact=cleanVoiceValue(voiceSeg.contact_name)||inferred.contact_name||firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
+    company=trimAtVoiceBoundary(voiceSeg.company)||inferred.company||firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
+    position=trimAtVoiceBoundary(voiceSeg.position)||inferred.position||firstMatch(joined,/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|CTO|директор|руководитель|менеджер)/i);
   }
 
   const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
@@ -851,6 +931,26 @@ let voiceAnimFrame=null;
 let voiceStartedAt=0;
 let voiceTimerHandle=null;
 
+function renderVoiceDetected(text){
+  const box=document.getElementById('voice_detected');
+  if(!box)return;
+  const d=parseLeadText(text||'','voice');
+  const fields=[
+    ['ФИО',d.contact_name],
+    ['Компания',d.company],
+    ['Должность',d.position],
+    ['Телефон',d.phone],
+    ['E-mail',d.email],
+    ['Тип',d.client_type],
+    ['Потребность',(d.needs||[]).join(', ')],
+    ['Потенциал',d.potential_cars]
+  ];
+  const found=fields.filter(x=>x[1]!==''&&x[1]!==null&&x[1]!==undefined&&String(x[1]).trim());
+  box.innerHTML=found.length
+    ?'<div class="voice-detected-title">Уже определено:</div><div class="voice-detected-chips">'+found.map(x=>'<span class="voice-detected-chip"><b>'+esc(x[0])+':</b> '+esc(x[1])+'</span>').join('')+'</div>'
+    :'<div class="hint">Пока поля не определены. Говорите: «ФИО…, компания…, должность…, телефон…»</div>';
+}
+
 function voiceEls(){
   return {
     status:document.getElementById('voice_status'),
@@ -943,6 +1043,7 @@ function updateVoiceTranscript(){
   const x=voiceEls();
   const val=(speechFinal+' '+speechInterim).replace(/\s+/g,' ').trim();
   if(x.text)x.text.value=val;
+  renderVoiceDetected(val);
   return val;
 }
 function speechErrorText(code){
@@ -1012,7 +1113,7 @@ function makeSpeechRecognition(){
 }
 function voiceLead(){
   stopVoiceSession();
-  el().innerHTML='<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и говорите обычной речью. На экране будет видно, слышит ли приложение микрофон.</p><div class="voice-panel"><div id="voice_mic" class="voice-mic"><span>🎙️</span></div><div id="voice_timer" class="voice-timer">00:00</div><div id="voice_status" class="voice-status idle"><span class="voice-status-dot"></span><span>Готов к записи</span></div></div><button id="voice_start" class="btn full voice-action" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn full voice-stop" onclick="stopVoice()" disabled>⏹ Остановить и заполнить карточку</button><label>Распознанный текст</label><textarea id="voice_text" class="voice-transcript" placeholder="Во время записи здесь будет появляться распознанная речь"></textarea><div id="voice_fallback" class="notice" hidden>Автоматическое распознавание недоступно. Нажмите поле выше и используйте микрофон клавиатуры телефона, затем нажмите «Заполнить лид из текста».</div><div class="spacer"></div><button class="btn secondary full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="stopVoiceSession();homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>';
+  el().innerHTML='<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и говорите обычной речью. Для максимальной точности можно диктовать: «ФИО Иван Иванов, компания Альфа, должность директор, телефон…».</p><div class="voice-panel"><div id="voice_mic" class="voice-mic"><span>🎙️</span></div><div id="voice_timer" class="voice-timer">00:00</div><div id="voice_status" class="voice-status idle"><span class="voice-status-dot"></span><span>Готов к записи</span></div></div><button id="voice_start" class="btn full voice-action" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn full voice-stop" onclick="stopVoice()" disabled>⏹ Остановить и заполнить карточку</button><label>Распознанный текст</label><textarea id="voice_text" class="voice-transcript" placeholder="Во время записи здесь будет появляться распознанная речь" oninput="renderVoiceDetected(this.value)"></textarea><div id="voice_detected" class="voice-detected"><div class="hint">Говорите свободно или с маркерами: «ФИО…, компания…, должность…, телефон…»</div></div><div id="voice_fallback" class="notice" hidden>Автоматическое распознавание недоступно. Нажмите поле выше и используйте микрофон клавиатуры телефона, затем нажмите «Заполнить лид из текста».</div><div class="spacer"></div><button class="btn secondary full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="stopVoiceSession();homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>';
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){
     setVoiceState('error','В этом Telegram нет встроенного распознавания речи. Используйте микрофон клавиатуры.');

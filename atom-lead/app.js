@@ -428,187 +428,155 @@ async function ocrBusinessCard(file,progress){
 }
 
 
-let cardCropSource=null;
-let cardCropRect=null;
-let cardCropDrag=null;
 
-function cardCanvasPoint(ev,canvas){
-  const r=canvas.getBoundingClientRect();
-  return {
-    x:(ev.clientX-r.left)*canvas.width/r.width,
-    y:(ev.clientY-r.top)*canvas.height/r.height
-  };
-}
-function resetCardCrop(){
-  if(!cardCropSource)return;
-  const m=Math.max(18,Math.round(Math.min(cardCropSource.width,cardCropSource.height)*0.035));
-  cardCropRect={x:m,y:m,w:Math.max(120,cardCropSource.width-m*2),h:Math.max(80,cardCropSource.height-m*2)};
-  drawCardCrop();
-}
-function drawCardCrop(){
-  const canvas=document.getElementById('card_crop_canvas');
-  if(!canvas||!cardCropSource||!cardCropRect)return;
-  canvas.width=cardCropSource.width;
-  canvas.height=cardCropSource.height;
-  const ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(cardCropSource,0,0);
-  ctx.save();
-  ctx.fillStyle='rgba(0,0,0,.48)';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(cardCropSource,cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h,cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h);
-  ctx.strokeStyle='#1aa7a5';
-  ctx.lineWidth=Math.max(4,Math.round(canvas.width/350));
-  ctx.strokeRect(cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h);
-  const hs=Math.max(14,Math.round(canvas.width/65));
-  const pts=[
-    [cardCropRect.x,cardCropRect.y],
-    [cardCropRect.x+cardCropRect.w,cardCropRect.y],
-    [cardCropRect.x,cardCropRect.y+cardCropRect.h],
-    [cardCropRect.x+cardCropRect.w,cardCropRect.y+cardCropRect.h]
-  ];
-  ctx.fillStyle='#fff';ctx.strokeStyle='#1aa7a5';ctx.lineWidth=Math.max(3,Math.round(canvas.width/500));
-  for(const [x,y] of pts){
-    ctx.beginPath();ctx.arc(x,y,hs,0,Math.PI*2);ctx.fill();ctx.stroke();
-  }
-  ctx.restore();
-}
-function cropHandleAt(p){
-  if(!cardCropRect)return null;
-  const r=cardCropRect;
-  const radius=Math.max(45,Math.min(cardCropSource.width,cardCropSource.height)*0.055);
-  const pts=[
-    ['nw',r.x,r.y],['ne',r.x+r.w,r.y],['sw',r.x,r.y+r.h],['se',r.x+r.w,r.y+r.h]
-  ];
-  for(const [name,x,y] of pts){
-    if(Math.hypot(p.x-x,p.y-y)<=radius)return name;
-  }
-  if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h)return 'move';
-  return null;
-}
-function clampCardRect(r){
-  const W=cardCropSource.width,H=cardCropSource.height,minW=Math.max(140,W*.16),minH=Math.max(90,H*.14);
-  r.w=Math.max(minW,r.w);r.h=Math.max(minH,r.h);
-  r.x=Math.max(0,Math.min(W-r.w,r.x));
-  r.y=Math.max(0,Math.min(H-r.h,r.y));
-  if(r.x+r.w>W)r.w=W-r.x;
-  if(r.y+r.h>H)r.h=H-r.y;
-  return r;
-}
-function onCardCropDown(ev){
-  const canvas=document.getElementById('card_crop_canvas');
-  if(!canvas||!cardCropRect)return;
-  ev.preventDefault();
-  const p=cardCanvasPoint(ev,canvas);
-  const mode=cropHandleAt(p);
-  if(!mode)return;
-  cardCropDrag={mode,start:p,rect:{...cardCropRect}};
-  try{canvas.setPointerCapture(ev.pointerId)}catch{}
-}
-function onCardCropMove(ev){
-  if(!cardCropDrag||!cardCropRect)return;
-  const canvas=document.getElementById('card_crop_canvas');
-  if(!canvas)return;
-  ev.preventDefault();
-  const p=cardCanvasPoint(ev,canvas),d=cardCropDrag,dx=p.x-d.start.x,dy=p.y-d.start.y;
-  let r={...d.rect};
-  if(d.mode==='move'){r.x+=dx;r.y+=dy}
-  if(d.mode==='nw'){r.x+=dx;r.y+=dy;r.w-=dx;r.h-=dy}
-  if(d.mode==='ne'){r.y+=dy;r.w+=dx;r.h-=dy}
-  if(d.mode==='sw'){r.x+=dx;r.w-=dx;r.h+=dy}
-  if(d.mode==='se'){r.w+=dx;r.h+=dy}
-  const minW=Math.max(140,cardCropSource.width*.16),minH=Math.max(90,cardCropSource.height*.14);
-  if(r.w<minW){
-    if(d.mode==='nw'||d.mode==='sw')r.x-=minW-r.w;
-    r.w=minW;
-  }
-  if(r.h<minH){
-    if(d.mode==='nw'||d.mode==='ne')r.y-=minH-r.h;
-    r.h=minH;
-  }
-  cardCropRect=clampCardRect(r);
-  drawCardCrop();
-}
-function onCardCropUp(ev){
-  cardCropDrag=null;
-}
-async function prepareCardCrop(){
-  const file=document.getElementById('card_file')?.files?.[0];
-  const box=document.getElementById('card_crop_box');
-  const msg=document.getElementById('cardmsg');
-  if(!file){if(box)box.hidden=true;return}
+let cardCameraStream=null;
+let cardCameraStarting=false;
+
+function stopCardCamera(){
   try{
-    if(msg)msg.innerHTML='<div class="notice">Готовлю фото для обрезки…</div>';
-    cardCropSource=await imageToCanvas(file);
-    resetCardCrop();
-    if(box)box.hidden=false;
-    const canvas=document.getElementById('card_crop_canvas');
-    if(canvas){
-      canvas.onpointerdown=onCardCropDown;
-      canvas.onpointermove=onCardCropMove;
-      canvas.onpointerup=onCardCropUp;
-      canvas.onpointercancel=onCardCropUp;
+    if(cardCameraStream){
+      cardCameraStream.getTracks().forEach(t=>t.stop());
+      cardCameraStream=null;
     }
-    const scan=document.getElementById('card_scan_btn');
-    if(scan)scan.disabled=false;
-    if(msg)msg.innerHTML='<div class="notice">Передвиньте рамку так, чтобы внутри осталась только визитка.</div>';
-  }catch(e){
-    if(msg)msg.innerHTML='<div class="error">'+esc(e.message||'Не удалось открыть фото')+'</div>';
-  }
+  }catch{}
+  const video=document.getElementById('card_camera');
+  if(video)try{video.srcObject=null}catch{}
 }
-function rotateCardCrop(){
-  if(!cardCropSource)return;
-  const src=cardCropSource,out=document.createElement('canvas');
-  out.width=src.height;out.height=src.width;
-  const ctx=out.getContext('2d');
-  ctx.translate(out.width,0);ctx.rotate(Math.PI/2);ctx.drawImage(src,0,0);
-  cardCropSource=out;
-  resetCardCrop();
-}
-function getCroppedCardCanvas(){
-  if(!cardCropSource||!cardCropRect)return null;
-  const r=cardCropRect,out=document.createElement('canvas');
-  out.width=Math.max(1,Math.round(r.w));out.height=Math.max(1,Math.round(r.h));
-  const ctx=out.getContext('2d');
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
-  ctx.drawImage(cardCropSource,r.x,r.y,r.w,r.h,0,0,out.width,out.height);
-  return out;
-}
-
-function cardLead(){
-  cardCropSource=null;cardCropRect=null;cardCropDrag=null;
-  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. После выбора появится рамка: оставьте внутри только визитку, без стола, рук и лишнего фона.</p><input id="card_file" type="file" accept="image/*" capture="environment" onchange="prepareCardCrop()"><div id="card_crop_box" class="cropbox" hidden><canvas id="card_crop_canvas" class="cropcanvas"></canvas><p class="hint crophelp">Перетаскивайте рамку и круглые углы. Лучше оставить небольшой запас по краям визитки.</p><div class="row"><button type="button" class="btn secondary" onclick="rotateCardCrop()">↻ Повернуть 90°</button><button type="button" class="btn secondary" onclick="resetCardCrop()">Сбросить рамку</button></div></div><div class="spacer"></div><button id="card_scan_btn" class="btn full" onclick="scanCard()" disabled>Распознать выделенную визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
-}
-
-async function scanCard(){
-  const m=document.getElementById('cardmsg');
-  const file=document.getElementById('card_file').files?.[0];
-  if(!file){
-    m.innerHTML='<div class="error">Сначала сделайте фото или выберите изображение.</div>';
+async function startCardCamera(){
+  if(cardCameraStarting||cardCameraStream)return;
+  const video=document.getElementById('card_camera');
+  const msg=document.getElementById('cardmsg');
+  const capture=document.getElementById('card_capture_btn');
+  const fallback=document.getElementById('card_fallback_btn');
+  if(!video)return;
+  if(!navigator.mediaDevices?.getUserMedia){
+    if(msg)msg.innerHTML='<div class="error">Telegram не дал доступ к камере. Используйте запасной вариант «Выбрать фото».</div>';
+    if(fallback)fallback.hidden=false;
     return;
   }
-  m.innerHTML='<div class="notice">Подготавливаю распознавание…</div>';
+  cardCameraStarting=true;
   try{
-    const cropped=getCroppedCardCanvas();
-    if(!cropped)throw new Error('Сначала выделите визитку рамкой');
-    const ocr=await ocrBusinessCard(cropped,function(t){
-      m.innerHTML='<div class="notice">'+esc(t)+'</div>';
+    if(msg)msg.innerHTML='<div class="notice">Открываю заднюю камеру…</div>';
+    const stream=await navigator.mediaDevices.getUserMedia({
+      audio:false,
+      video:{
+        facingMode:{ideal:'environment'},
+        width:{ideal:1920},
+        height:{ideal:1080}
+      }
     });
-    if(!ocr.text&&!ocr.qrRaw)throw new Error('Текст на визитке не распознан');
-    let draft=parseLeadText(ocr.text||'','card',ocr.meta||[]);
-    if(ocr.qrRaw){
-      draft=mergeDraft(draft,parseVCardText(ocr.qrRaw));
-      draft._qr_found=true;
-    }
-    draft._raw_ocr=usefulCardLines(ocr.text||'').join('\n');
-    draft._ocr_confidence=ocr.confidence;
-    applyDraft(draft);
-    const msg=document.getElementById('leadmsg');
-    if(msg&&draft._qr_found)msg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: контактные данные из QR использованы как более точные.</div>');
+    cardCameraStream=stream;
+    video.srcObject=stream;
+    video.setAttribute('playsinline','');
+    video.muted=true;
+    await video.play();
+
+    try{
+      const track=stream.getVideoTracks()[0];
+      const caps=track.getCapabilities?.()||{};
+      const advanced=[];
+      if(Array.isArray(caps.focusMode)&&caps.focusMode.includes('continuous'))advanced.push({focusMode:'continuous'});
+      if(advanced.length)await track.applyConstraints({advanced});
+    }catch{}
+
+    if(capture)capture.disabled=false;
+    if(msg)msg.innerHTML='<div class="notice">Поместите визитку целиком внутрь рамки и нажмите «Снять и распознать».</div>';
   }catch(e){
-    m.innerHTML='<div class="error">'+esc(e.message||'Ошибка распознавания')+'</div>';
+    stopCardCamera();
+    if(msg)msg.innerHTML='<div class="error">Не удалось открыть камеру. Разрешите камеру для Telegram или используйте «Выбрать фото».</div>';
+    if(fallback)fallback.hidden=false;
+  }finally{
+    cardCameraStarting=false;
   }
 }
+function cardLead(){
+  stopCardCamera();
+  el().innerHTML='<div class="card card-camera-card"><h2>📷 Лид по визитке</h2><p class="hint">Наведите камеру на визитку. Держите её ровно, без бликов, целиком внутри рамки.</p><div class="card-camera-stage"><video id="card_camera" class="card-camera-video" autoplay playsinline muted></video><div id="card_camera_guide" class="card-camera-guide"><span>ВИЗИТКА</span></div></div><div class="spacer"></div><button id="card_capture_btn" class="btn full" onclick="captureCardPhoto()" disabled>📸 Снять и распознать</button><div class="spacer"></div><button id="card_fallback_btn" class="btn secondary full" onclick="openCardFileFallback()" hidden>Выбрать фото вместо камеры</button><input id="card_file_fallback" type="file" accept="image/*" capture="environment" hidden onchange="fallbackCardFileChanged()"><div class="spacer"></div><button class="btn secondary full" onclick="stopCardCamera();homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>';
+  setTimeout(startCardCamera,0);
+}
+function openCardFileFallback(){
+  document.getElementById('card_file_fallback')?.click();
+}
+async function fallbackCardFileChanged(){
+  const file=document.getElementById('card_file_fallback')?.files?.[0];
+  if(!file)return;
+  const msg=document.getElementById('cardmsg');
+  try{
+    if(msg)msg.innerHTML='<div class="notice">Готовлю фото…</div>';
+    const canvas=await imageToCanvas(file);
+    await recognizeCapturedCard(canvas);
+  }catch(e){
+    if(msg)msg.innerHTML='<div class="error">'+esc(e.message||'Не удалось обработать фото')+'</div>';
+  }
+}
+function captureGuideCanvas(){
+  const video=document.getElementById('card_camera');
+  const guide=document.getElementById('card_camera_guide');
+  if(!video||!guide||!video.videoWidth||!video.videoHeight)throw new Error('Камера ещё не готова');
+
+  const vr=video.getBoundingClientRect();
+  const gr=guide.getBoundingClientRect();
+  const vw=video.videoWidth,vh=video.videoHeight;
+  const scale=Math.max(vr.width/vw,vr.height/vh);
+  const shownW=vw*scale,shownH=vh*scale;
+  const cropX=(shownW-vr.width)/2;
+  const cropY=(shownH-vr.height)/2;
+
+  let sx=(gr.left-vr.left+cropX)/scale;
+  let sy=(gr.top-vr.top+cropY)/scale;
+  let sw=gr.width/scale;
+  let sh=gr.height/scale;
+
+  const padX=sw*0.025,padY=sh*0.035;
+  sx-=padX;sy-=padY;sw+=padX*2;sh+=padY*2;
+
+  sx=Math.max(0,Math.min(vw-1,sx));
+  sy=Math.max(0,Math.min(vh-1,sy));
+  sw=Math.max(1,Math.min(vw-sx,sw));
+  sh=Math.max(1,Math.min(vh-sy,sh));
+
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.round(sw);
+  canvas.height=Math.round(sh);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+  return canvas;
+}
+async function captureCardPhoto(){
+  const msg=document.getElementById('cardmsg');
+  const btn=document.getElementById('card_capture_btn');
+  try{
+    if(btn)btn.disabled=true;
+    if(msg)msg.innerHTML='<div class="notice">Снимок сделан. Начинаю распознавание…</div>';
+    const canvas=captureGuideCanvas();
+    stopCardCamera();
+    await recognizeCapturedCard(canvas);
+  }catch(e){
+    if(btn)btn.disabled=false;
+    if(msg)msg.innerHTML='<div class="error">'+esc(e.message||'Не удалось сделать снимок')+'</div>';
+  }
+}
+async function recognizeCapturedCard(canvas){
+  const msg=document.getElementById('cardmsg');
+  const ocr=await ocrBusinessCard(canvas,function(t){
+    if(msg)msg.innerHTML='<div class="notice">'+esc(t)+'</div>';
+  });
+  if(!ocr.text&&!ocr.qrRaw)throw new Error('Текст на визитке не распознан');
+  let draft=parseLeadText(ocr.text||'','card',ocr.meta||[]);
+  if(ocr.qrRaw){
+    draft=mergeDraft(draft,parseVCardText(ocr.qrRaw));
+    draft._qr_found=true;
+  }
+  draft._raw_ocr=usefulCardLines(ocr.text||'').join('\n');
+  draft._ocr_confidence=ocr.confidence;
+  applyDraft(draft);
+  const leadMsg=document.getElementById('leadmsg');
+  if(leadMsg&&draft._qr_found){
+    leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: точные контактные данные взяты из QR.</div>');
+  }
+}
+window.addEventListener('pagehide',stopCardCamera);
 let speechRec=null,speechFinal='';
 function voiceLead(){
   el().innerHTML=`<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и продиктуйте данные. Распознавание использует функцию телефона/браузера и не расходует API-кредиты.</p><button id="voice_start" class="btn full" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn secondary full" onclick="stopVoice()" disabled>⏹ Остановить</button><div class="spacer"></div><textarea id="voice_text" placeholder="Если голосовой ввод не поддерживается, нажмите микрофон на клавиатуре телефона и продиктуйте сюда"></textarea><div class="spacer"></div><button class="btn full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>`;

@@ -27,11 +27,43 @@ function firstMatch(text,re){
 function smartLines(text){
   return String(text||'').split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
 }
+
+function sanitizeCardLine(line){
+  return String(line||'')
+    .replace(/[‐‑‒–—]/g,'-')
+    .replace(/\s+([,.;:])/g,'$1')
+    .replace(/[|¦]/g,'I')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+function usefulCardLines(text){
+  const seen=new Set(),out=[];
+  for(const src of smartLines(text)){
+    const line=sanitizeCardLine(src);
+    if(line.length<2)continue;
+    const useful=(line.match(/[A-Za-zА-Яа-яЁё0-9@.+()\-]/g)||[]).length;
+    const weird=(line.match(/[^\sA-Za-zА-Яа-яЁё0-9@.,:+()\-\/&«»"'№]/g)||[]).length;
+    if(useful/Math.max(1,line.length)<0.58)continue;
+    if(weird/Math.max(1,line.length)>0.12)continue;
+    const key=line.toLowerCase().replace(/[^a-zа-яё0-9@]+/gi,'');
+    if(key.length<2||seen.has(key))continue;
+    seen.add(key);out.push(line);
+  }
+  return out;
+}
+function stripCardContacts(line){
+  return sanitizeCardLine(line)
+    .replace(/(?:\+?7|8)[\s\-()0-9ОOІI|l]{9,}/g,' ')
+    .replace(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/ig,' ')
+    .replace(/(?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё\-]+(?:\.[a-z0-9а-яё\-]+)+[^\s]*/ig,' ')
+    .replace(/\s+/g,' ').trim();
+}
+
 function parseLeadText(text,source='voice'){
   const raw=String(text||'').trim();
-  const lines=smartLines(raw);
-  const joined=' '+raw.replace(/\s+/g,' ')+' ';
-  const phoneRaw=firstMatch(joined,/(?:\+?7|8)[\s\-\(\)]*\d{3}[\s\-\(\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/);
+  const lines=source==='card'?usefulCardLines(raw):smartLines(raw);
+  const joined=' '+lines.join(' ').replace(/\s+/g,' ')+' ';
+  const phoneRaw=firstMatch(joined,/((?:\+?7|8)[\s\-\(\)0-9ОOІI|l]{9,20})/i);
   const phone=normalizePhoneLocal(phoneRaw);
   const email=firstMatch(joined,/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i).toLowerCase();
   const website=firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё-]+(?:\.[a-z0-9а-яё-]+)+(?:\/[^\s]*)?)/i);
@@ -39,20 +71,20 @@ function parseLeadText(text,source='voice'){
   const potential=potentialM?Number(potentialM[1]):null;
 
   let company='';
-  const companyLine=lines.find(x=>/\b(?:ООО|АО|ПАО|ИП|ГК|ГБУ|ГУП|МУП|ФГУП|LLC|JSC)\b/i.test(x));
-  if(companyLine) company=companyLine;
+  const companyLine=lines.find(x=>/\b(?:ООО|АО|ПАО|ИП|ГК|ГБУ|ГУП|МУП|ФГУП|LLC|JSC|LTD|INC)\b/i.test(x));
+  if(companyLine) company=stripCardContacts(companyLine).slice(0,255);
   if(!company) company=firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
 
   const roleRe=/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|директор|руководитель|менеджер)/i;
   let position='';
   const roleLine=lines.find(x=>roleRe.test(x));
-  if(roleLine) position=roleLine;
+  if(roleLine) position=stripCardContacts(roleLine).slice(0,255);
 
   let contact='';
   contact=firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
   if(!contact){
-    const banned=/(ооо|ао|пао|директор|руководитель|менеджер|тел|моб|email|e-mail|www|http|компания|отдел)/i;
-    const cand=lines.find(x=>!banned.test(x)&&/^[А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2}$/.test(x));
+    const banned=/(ооо|ао|пао|ип|llc|ltd|inc|директор|руководитель|менеджер|тел|моб|phone|email|e-mail|www|http|компания|отдел|департамент|офис|office)/i;
+    const cand=lines.map(stripCardContacts).find(x=>!banned.test(x)&&x.length>=5&&x.length<=60&&/^[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+(?:\s+[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+){1,2}$/.test(x));
     if(cand) contact=cand;
   }
 
@@ -82,7 +114,7 @@ function parseLeadText(text,source='voice'){
   const nextM=joined.match(/(?:следующий шаг|договорились|нужно|надо|перезвонить|связаться)\s*[:\-]?\s*([^.;]{3,120})/i);
   if(nextM)next=nextM[1].trim();
 
-  const comment=(source==='card'?'Распознано с визитки':'Распознано голосом')+(raw?'\n'+raw:'');
+  const comment=source==='card'?'Данные распознаны с визитки автоматически. Проверьте поля перед сохранением.':('Распознано голосом'+(raw?'\n'+raw:''));
   return {contact_name:contact,company,position,phone,email,website,client_type,needs,potential_cars:potential,potential_range:'',interest,comment,next_step:next,next_step_date:''};
 }
 function applyDraft(d){
@@ -102,7 +134,7 @@ function applyDraft(d){
   if(d.next_step)extra.push('Следующий шаг: '+d.next_step+(d.next_step_date?' ('+d.next_step_date+')':''));
   if(extra.length)l_comment.value=[l_comment.value,...extra].filter(Boolean).join('\n');
   const msg=document.getElementById('leadmsg');
-  if(msg)msg.innerHTML='<div class="notice">Данные распознаны без платного API. Проверьте поля перед регистрацией.</div>';
+  if(msg){const found=[d.contact_name&&'ФИО',d.company&&'компания',d.position&&'должность',d.phone&&'телефон',d.email&&'e-mail',d.website&&'сайт'].filter(Boolean);msg.innerHTML='<div class="notice"><b>Распознано:</b> '+(found.length?found.join(', '):'основные поля не определены')+'. Проверьте данные перед регистрацией.</div>'+(d._raw_ocr?'<details><summary>Показать распознанный текст</summary><p class="hint" style="white-space:pre-wrap">'+esc(d._raw_ocr)+'</p></details>':'');}
 }
 function fileToBase64(file){
   return new Promise((resolve,reject)=>{
@@ -242,10 +274,10 @@ async function ocrBusinessCard(file,progress){
         else if(/loading|initializing/i.test(x.status||''))progress('Загружаю языковую модель…');
       }
     });
-    await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1',user_defined_dpi:'300'});
+    await worker.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1',user_defined_dpi:'300'});
     const r1=await worker.recognize(gray,{rotateAuto:true});
     progress('Проверяю контрастный вариант…');
-    await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});
+    await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1',user_defined_dpi:'300'});
     const r2=await worker.recognize(bw,{rotateAuto:true});
     return {
       text:mergeOcrTexts(r1&&r1.data?r1.data.text:'',r2&&r2.data?r2.data.text:''),
@@ -274,7 +306,7 @@ async function scanCard(){
     });
     if(!ocr.text)throw new Error('Текст на визитке не распознан');
     const draft=parseLeadText(ocr.text,'card');
-    draft._raw_ocr=ocr.text;
+    draft._raw_ocr=usefulCardLines(ocr.text).join('\n');
     draft._ocr_confidence=ocr.confidence;
     applyDraft(draft);
   }catch(e){

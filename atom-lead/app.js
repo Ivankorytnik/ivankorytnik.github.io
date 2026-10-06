@@ -744,40 +744,279 @@ async function recognizeCapturedCard(canvas){
   }
 }
 window.addEventListener('pagehide',stopCardCamera);
-let speechRec=null,speechFinal='';
-function voiceLead(){
-  el().innerHTML=`<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и продиктуйте данные. Распознавание использует функцию телефона/браузера и не расходует API-кредиты.</p><button id="voice_start" class="btn full" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn secondary full" onclick="stopVoice()" disabled>⏹ Остановить</button><div class="spacer"></div><textarea id="voice_text" placeholder="Если голосовой ввод не поддерживается, нажмите микрофон на клавиатуре телефона и продиктуйте сюда"></textarea><div class="spacer"></div><button class="btn full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>`;
+
+let speechRec=null;
+let speechFinal='';
+let speechInterim='';
+let voiceListening=false;
+let voiceStopping=false;
+let voiceRestartTimer=null;
+let voiceMediaStream=null;
+let voiceAudioCtx=null;
+let voiceAnalyser=null;
+let voiceAnimFrame=null;
+let voiceStartedAt=0;
+let voiceTimerHandle=null;
+
+function voiceEls(){
+  return {
+    status:document.getElementById('voice_status'),
+    text:document.getElementById('voice_text'),
+    start:document.getElementById('voice_start'),
+    stop:document.getElementById('voice_stop'),
+    mic:document.getElementById('voice_mic'),
+    timer:document.getElementById('voice_timer'),
+    fallback:document.getElementById('voice_fallback')
+  };
 }
-function startVoice(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  const m=document.getElementById('voicemsg');
-  if(!SR){
-    m.innerHTML='<div class="notice">В этом Telegram голосовое распознавание браузера недоступно. Нажмите поле ниже, откройте клавиатуру и используйте микрофон клавиатуры — это тоже без API-кредитов.</div>';
-    document.getElementById('voice_text').focus();return;
+function setVoiceState(state,message=''){
+  const x=voiceEls();
+  const labels={
+    idle:'Готов к записи',
+    requesting:'Запрашиваю доступ к микрофону…',
+    recording:'Слушаю. Говорите данные клиента',
+    processing:'Обрабатываю распознанный текст…',
+    ready:'Текст распознан',
+    error:'Не удалось распознать речь'
+  };
+  if(x.status){
+    x.status.className='voice-status '+state;
+    x.status.innerHTML='<span class="voice-status-dot"></span><span>'+esc(message||labels[state]||'')+'</span>';
   }
-  try{
-    speechFinal='';speechRec=new SR();speechRec.lang='ru-RU';speechRec.continuous=true;speechRec.interimResults=true;
-    speechRec.onresult=e=>{
-      let interim='';
-      for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)speechFinal+=t+' ';else interim+=t}
-      document.getElementById('voice_text').value=(speechFinal+interim).trim();
-    };
-    speechRec.onerror=e=>{m.innerHTML='<div class="error">Голосовой ввод не сработал. Используйте микрофон клавиатуры в поле ниже.</div>'};
-    speechRec.onend=()=>{voice_start.disabled=false;voice_stop.disabled=true};
-    speechRec.start();voice_start.disabled=true;voice_stop.disabled=false;
-    m.innerHTML='<div class="notice">🔴 Говорите данные клиента. После окончания нажмите «Остановить».</div>';
-  }catch(e){m.innerHTML='<div class="error">Не удалось запустить распознавание. Используйте микрофон клавиатуры.</div>'}
+  if(x.mic){
+    x.mic.classList.toggle('recording',state==='recording');
+    x.mic.classList.toggle('processing',state==='processing');
+    x.mic.classList.toggle('error',state==='error');
+  }
+  if(x.start){
+    x.start.disabled=['requesting','recording','processing'].includes(state);
+    x.start.classList.toggle('busy',state==='requesting'||state==='processing');
+  }
+  if(x.stop){
+    x.stop.disabled=state!=='recording';
+    x.stop.classList.toggle('recording',state==='recording');
+  }
 }
-function stopVoice(){
+function stopVoiceVisuals(){
+  if(voiceTimerHandle){clearInterval(voiceTimerHandle);voiceTimerHandle=null}
+  if(voiceAnimFrame){cancelAnimationFrame(voiceAnimFrame);voiceAnimFrame=null}
+  try{voiceAudioCtx?.close()}catch{}
+  voiceAudioCtx=null;voiceAnalyser=null;
+  const mic=document.getElementById('voice_mic');
+  if(mic)mic.style.removeProperty('--voice-level');
+}
+function stopVoiceMedia(){
+  try{voiceMediaStream?.getTracks().forEach(t=>t.stop())}catch{}
+  voiceMediaStream=null;
+  stopVoiceVisuals();
+}
+function startVoiceTimer(){
+  voiceStartedAt=Date.now();
+  const tick=()=>{
+    const timer=document.getElementById('voice_timer');
+    if(!timer)return;
+    const sec=Math.floor((Date.now()-voiceStartedAt)/1000);
+    const mm=String(Math.floor(sec/60)).padStart(2,'0');
+    const ss=String(sec%60).padStart(2,'0');
+    timer.textContent=mm+':'+ss;
+  };
+  tick();
+  voiceTimerHandle=setInterval(tick,250);
+}
+function startVoiceLevelMeter(stream){
+  try{
+    voiceAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const source=voiceAudioCtx.createMediaStreamSource(stream);
+    voiceAnalyser=voiceAudioCtx.createAnalyser();
+    voiceAnalyser.fftSize=256;
+    voiceAnalyser.smoothingTimeConstant=.72;
+    source.connect(voiceAnalyser);
+    const data=new Uint8Array(voiceAnalyser.frequencyBinCount);
+    const draw=()=>{
+      if(!voiceListening||!voiceAnalyser)return;
+      voiceAnalyser.getByteFrequencyData(data);
+      let sum=0;
+      for(const v of data)sum+=v;
+      const avg=sum/Math.max(1,data.length);
+      const level=Math.max(.08,Math.min(1,avg/75));
+      const mic=document.getElementById('voice_mic');
+      if(mic)mic.style.setProperty('--voice-level',String(level));
+      voiceAnimFrame=requestAnimationFrame(draw);
+    };
+    draw();
+  }catch{}
+}
+function updateVoiceTranscript(){
+  const x=voiceEls();
+  const val=(speechFinal+' '+speechInterim).replace(/\s+/g,' ').trim();
+  if(x.text)x.text.value=val;
+  return val;
+}
+function speechErrorText(code){
+  return ({
+    'not-allowed':'Нет разрешения на микрофон. Разрешите микрофон для Telegram.',
+    'service-not-allowed':'Сервис распознавания речи недоступен в этом Telegram.',
+    'audio-capture':'Микрофон не найден или занят другим приложением.',
+    'network':'Сервис распознавания речи недоступен по сети. Попробуйте ещё раз.',
+    'no-speech':'Речь не услышана. Говорите немного громче и ближе к телефону.',
+    'aborted':'Запись остановлена.'
+  })[code]||('Ошибка распознавания: '+code);
+}
+function makeSpeechRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return null;
+  const rec=new SR();
+  rec.lang='ru-RU';
+  rec.continuous=true;
+  rec.interimResults=true;
+  rec.maxAlternatives=1;
+
+  rec.onstart=()=>{
+    if(voiceListening)setVoiceState('recording');
+  };
+  rec.onresult=e=>{
+    speechInterim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=String(e.results[i][0]?.transcript||'').trim();
+      if(!t)continue;
+      if(e.results[i].isFinal)speechFinal+=(speechFinal?' ':'')+t;
+      else speechInterim+=(speechInterim?' ':'')+t;
+    }
+    updateVoiceTranscript();
+  };
+  rec.onerror=e=>{
+    const code=e?.error||'unknown';
+    if(code==='no-speech'&&voiceListening&&!voiceStopping)return;
+    if(code==='aborted'&&voiceStopping)return;
+    if(code==='network'&&voiceListening&&!voiceStopping){
+      setVoiceState('recording','Связь с распознаванием прервалась. Перезапускаю…');
+      return;
+    }
+    setVoiceState('error',speechErrorText(code));
+    if(code==='not-allowed'||code==='service-not-allowed'||code==='audio-capture'){
+      voiceListening=false;
+      stopVoiceMedia();
+      const fb=document.getElementById('voice_fallback');
+      if(fb)fb.hidden=false;
+    }
+  };
+  rec.onend=()=>{
+    if(voiceListening&&!voiceStopping){
+      clearTimeout(voiceRestartTimer);
+      voiceRestartTimer=setTimeout(()=>{
+        try{
+          speechRec=makeSpeechRecognition();
+          speechRec?.start();
+        }catch{
+          setVoiceState('error','Распознавание остановилось. Нажмите «Начать запись» ещё раз.');
+          voiceListening=false;
+          stopVoiceMedia();
+        }
+      },180);
+    }
+  };
+  return rec;
+}
+function voiceLead(){
+  stopVoiceSession();
+  el().innerHTML='<div class="card"><h2>🎙️ Лид голосом</h2><p class="hint">Нажмите «Начать запись» и говорите обычной речью. На экране будет видно, слышит ли приложение микрофон.</p><div class="voice-panel"><div id="voice_mic" class="voice-mic"><span>🎙️</span></div><div id="voice_timer" class="voice-timer">00:00</div><div id="voice_status" class="voice-status idle"><span class="voice-status-dot"></span><span>Готов к записи</span></div></div><button id="voice_start" class="btn full voice-action" onclick="startVoice()">🎙️ Начать запись</button><div class="spacer"></div><button id="voice_stop" class="btn full voice-stop" onclick="stopVoice()" disabled>⏹ Остановить и заполнить карточку</button><label>Распознанный текст</label><textarea id="voice_text" class="voice-transcript" placeholder="Во время записи здесь будет появляться распознанная речь"></textarea><div id="voice_fallback" class="notice" hidden>Автоматическое распознавание недоступно. Нажмите поле выше и используйте микрофон клавиатуры телефона, затем нажмите «Заполнить лид из текста».</div><div class="spacer"></div><button class="btn secondary full" onclick="voiceTextToLead()">Заполнить лид из текста</button><div class="spacer"></div><button class="btn secondary full" onclick="stopVoiceSession();homeFromApi()">← Главное меню</button><div id="voicemsg"></div></div>';
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    setVoiceState('error','В этом Telegram нет встроенного распознавания речи. Используйте микрофон клавиатуры.');
+    const fb=document.getElementById('voice_fallback');
+    if(fb)fb.hidden=false;
+  }
+}
+async function startVoice(){
+  if(voiceListening)return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    setVoiceState('error','В этом Telegram нет встроенного распознавания речи. Используйте микрофон клавиатуры.');
+    document.getElementById('voice_text')?.focus();
+    return;
+  }
+  setVoiceState('requesting');
+  speechFinal='';speechInterim='';
+  updateVoiceTranscript();
+  voiceStopping=false;
+  try{
+    voiceMediaStream=await navigator.mediaDevices.getUserMedia({
+      audio:{
+        echoCancellation:true,
+        noiseSuppression:true,
+        autoGainControl:true
+      },
+      video:false
+    });
+    voiceListening=true;
+    startVoiceLevelMeter(voiceMediaStream);
+    startVoiceTimer();
+    speechRec=makeSpeechRecognition();
+    if(!speechRec)throw new Error('speech_recognition_unavailable');
+    speechRec.start();
+    setVoiceState('recording');
+  }catch(e){
+    voiceListening=false;
+    stopVoiceMedia();
+    const name=e?.name||'';
+    const msg=name==='NotAllowedError'
+      ?'Нет разрешения на микрофон. Разрешите микрофон для Telegram и попробуйте снова.'
+      :name==='NotFoundError'
+        ?'Микрофон на устройстве не найден.'
+        :'Не удалось запустить голосовой ввод.';
+    setVoiceState('error',msg);
+    const fb=document.getElementById('voice_fallback');
+    if(fb)fb.hidden=false;
+  }
+}
+async function stopVoice(){
+  if(!voiceListening&&!speechRec)return;
+  voiceStopping=true;
+  voiceListening=false;
+  clearTimeout(voiceRestartTimer);
+  setVoiceState('processing');
   try{speechRec?.stop()}catch{}
-  voice_start.disabled=false;voice_stop.disabled=true;
-  const m=document.getElementById('voicemsg');if(m)m.innerHTML='<div class="notice">Текст готов. Нажмите «Заполнить лид из текста».</div>';
+  speechRec=null;
+  stopVoiceMedia();
+
+  await new Promise(r=>setTimeout(r,420));
+  const text=updateVoiceTranscript();
+  if(!text){
+    voiceStopping=false;
+    setVoiceState('error','Речь не распознана. Попробуйте ещё раз, говорите ближе к телефону.');
+    return;
+  }
+
+  setVoiceState('processing','Разбираю текст по полям лида…');
+  await new Promise(r=>setTimeout(r,250));
+  voiceStopping=false;
+  const d=parseLeadText(text,'voice');
+  d._recognized_text=text;
+  applyDraft(d);
+}
+function stopVoiceSession(){
+  voiceListening=false;
+  voiceStopping=true;
+  clearTimeout(voiceRestartTimer);
+  try{speechRec?.abort()}catch{}
+  speechRec=null;
+  stopVoiceMedia();
+  voiceStopping=false;
 }
 function voiceTextToLead(){
-  const t=document.getElementById('voice_text').value.trim();
-  if(!t){document.getElementById('voicemsg').innerHTML='<div class="error">Сначала продиктуйте или введите текст.</div>';return}
-  const d=parseLeadText(t,'voice');d._recognized_text=t;applyDraft(d);
+  const t=document.getElementById('voice_text')?.value.trim()||'';
+  if(!t){
+    setVoiceState('error','Сначала продиктуйте или введите текст.');
+    return;
+  }
+  setVoiceState('processing','Разбираю текст по полям лида…');
+  setTimeout(()=>{
+    const d=parseLeadText(t,'voice');
+    d._recognized_text=t;
+    applyDraft(d);
+  },220);
 }
+window.addEventListener('pagehide',stopVoiceSession);
 
 async function profile(){const x=await api('me');el().innerHTML=`<div class="card"><h2>Мой профиль</h2><p><b>${esc(x.user.full_name)}</b></p><p>${esc(x.user.corporate_email)}</p><p class="muted">Telegram ID: ${esc(x.user.telegram_id)}</p><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button></div>`}
 async function homeFromApi(){const x=await api('me');home(x.user)}

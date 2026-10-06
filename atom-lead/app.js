@@ -1435,7 +1435,19 @@ async function leadDetails(id){
   const needs=Array.isArray(d.needs)&&d.needs.length?d.needs.join(', '):'—';
   const potential=d.potential_cars??d.potential_range??'—';
   const recognized=d.recognized_text?'<details open><summary>Распознанный текст</summary><p class="hint" style="white-space:pre-wrap">'+esc(d.recognized_text)+'</p></details>':'';
-  el().innerHTML=`<div class="card"><h2>${esc(d.contact_name||d.company||'Лид')}</h2><p class="muted">${esc(d.lead_code||'')}</p><div class="lead-detail"><p><b>Компания:</b> ${esc(d.company||'—')}</p><p><b>Должность:</b> ${esc(d.position||'—')}</p><p><b>Телефон:</b> ${esc(d.phone||'—')}</p><p><b>E-mail:</b> ${esc(d.email||'—')}</p><p><b>Тип клиента:</b> ${esc(d.client_type||'—')}</p><p><b>Потребность:</b> ${esc(needs)}</p><p><b>Потенциал:</b> ${esc(potential)}</p><p><b>Интерес:</b> ${esc(d.interest||'—')}</p><p><b>Комментарий:</b><br>${esc(d.comment||'—')}</p>${recognized}</div><div class="spacer"></div><button class="btn secondary full" onclick="listLeads()">← К списку</button></div>`;
+  el().innerHTML=`<div class="card"><h2>${esc(d.contact_name||d.company||'Лид')}</h2><p class="muted">${esc(d.lead_code||'')}</p><div class="lead-detail"><p><b>Компания:</b> ${esc(d.company||'—')}</p><p><b>Должность:</b> ${esc(d.position||'—')}</p><p><b>Телефон:</b> ${esc(d.phone||'—')}</p><p><b>E-mail:</b> ${esc(d.email||'—')}</p><p><b>Тип клиента:</b> ${esc(d.client_type||'—')}</p><p><b>Потребность:</b> ${esc(needs)}</p><p><b>Потенциал:</b> ${esc(potential)}</p><p><b>Интерес:</b> ${esc(d.interest||'—')}</p><p><b>Комментарий:</b><br>${esc(d.comment||'—')}</p>${recognized}</div><div class="spacer"></div><button class="btn danger full" onclick="confirmDeleteLead('${d.id}','${esc(d.lead_code||'')}')">🗑 Удалить лид</button><div class="spacer"></div><button class="btn secondary full" onclick="listLeads()">← К списку</button></div>`;
+}
+function confirmDeleteLead(id,code){
+  const ok=window.confirm('Удалить лид '+(code||'')+'? Это действие нельзя отменить.');
+  if(ok) deleteLead(id);
+}
+async function deleteLead(id){
+  try{
+    await api('leads?id='+encodeURIComponent(id),{method:'DELETE'});
+    el().innerHTML='<div class="success"><h2>🗑 Лид удалён</h2><p>Запись удалена из списка зарегистрированных лидов.</p></div><div class="spacer"></div><button class="btn full" onclick="listLeads()">К зарегистрированным лидам</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">Главное меню</button>';
+  }catch(e){
+    el().insertAdjacentHTML('beforeend','<div class="error">'+esc(errMsg(e))+'</div>');
+  }
 }
 function searchLeads(){el().innerHTML=`<div class="card"><h2>Поиск контакта</h2><input id="search_q" placeholder="ФИО, компания, телефон, e-mail"><div class="spacer"></div><button class="btn full" onclick="listLeads(search_q.value.trim())">Найти</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button></div>`}
 completeFromHash().then(done=>{if(!done)boot()});

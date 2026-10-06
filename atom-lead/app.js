@@ -16,7 +16,14 @@ function home(user){el().innerHTML=`<div class="card"><h1>Добро пожал�
 
 
 function normalizePhoneLocal(v){
-  let d=String(v||'').replace(/\D/g,'');
+  let s=String(v||'')
+    .replace(/[ОOоo]/g,'0')
+    .replace(/[ІIil|]/g,'1');
+  let d=s.replace(/\D/g,'');
+  if(d.length>11){
+    const m=d.match(/(?:7|8)?(\d{10})$/);
+    if(m)d=(d.startsWith('7')||d.startsWith('8')?d[0]:'8')+m[1];
+  }
   if(d.length===10)d='8'+d;
   if(d.length===11&&d.startsWith('7'))d='8'+d.slice(1);
   return d.length===11&&d.startsWith('8')?d:'';
@@ -168,36 +175,175 @@ async function detectCardBarcode(canvas){
   }catch{return null}
 }
 
+
+function normCardKey(s){
+  return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/gi,' ').replace(/\s+/g,' ').trim();
+}
+function labelValue(lines,labelRe){
+  for(let i=0;i<lines.length;i++){
+    const raw=sanitizeCardLine(lines[i]);
+    if(!labelRe.test(raw))continue;
+    let tail=raw.replace(labelRe,'').replace(/^[\s:;=\-–—|]+/,'').trim();
+    if(tail&&tail.length>1)return tail;
+    const next=sanitizeCardLine(lines[i+1]||'');
+    if(next&&next.length>1)return next;
+  }
+  return '';
+}
+function metaForText(metaLines,text){
+  const key=normCardKey(text);
+  if(!key)return null;
+  const hits=(metaLines||[]).filter(x=>{
+    const k=normCardKey(x.text);
+    return k===key||k.includes(key)||key.includes(k);
+  });
+  if(!hits.length)return null;
+  return hits.sort((a,b)=>(b.height||0)-(a.height||0))[0];
+}
+function median(nums){
+  const a=nums.filter(Number.isFinite).sort((x,y)=>x-y);
+  if(!a.length)return 0;
+  const m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+function looksLikePersonName(s){
+  const t=stripCardContacts(s);
+  const words=t.split(/\s+/).filter(Boolean);
+  if(words.length<2||words.length>3||t.length<5||t.length>70)return false;
+  if(/\d|@|https?:|www\.|\.ru\b|\.com\b/i.test(t))return false;
+  return words.every(w=>/^[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z\-]{1,30}$/.test(w));
+}
+function extractPhoneOcr(lines){
+  const candidates=[];
+  for(const line of lines){
+    const matches=String(line).match(/(?:\+?7|8|7)?[\s\-()0-9ОOоoІIil|]{10,26}/g)||[];
+    for(const x of matches){
+      const p=normalizePhoneLocal(x);
+      if(p&&!candidates.includes(p))candidates.push(p);
+    }
+  }
+  return candidates[0]||'';
+}
+function bestCardName(lines,metaLines){
+  const labeled=labelValue(lines,/^(?:фио|ф\.?\s*и\.?\s*о\.?|имя|name|contact(?:\s+person)?|контакт(?:ное\s+лицо)?)\b/i);
+  if(looksLikePersonName(labeled))return stripCardContacts(labeled);
+
+  const roleRe=/(директор|руководител|начальник|менеджер|президент|вице[- ]?президент|председател|основател|владелец|партнер|партнёр|director|manager|head|chief|founder|owner|partner|president|chairman|ceo|cfo|coo|cto|cmo|cro|vp\b)/i;
+  const companyRe=/(ооо|ао|пао|ип\b|llc|ltd|inc|jsc|group|групп|holding|холдинг|company|компания|банк|bank|taxi|такси|auto|авто|motors|тех|tech|логист|transport|транс)/i;
+  const heights=(metaLines||[]).map(x=>Number(x.height||0)).filter(x=>x>0);
+  const med=median(heights)||1;
+
+  const scored=[];
+  for(let i=0;i<lines.length;i++){
+    const t=stripCardContacts(lines[i]);
+    if(!looksLikePersonName(t))continue;
+    let score=20;
+    const words=t.split(/\s+/);
+    if(words.length===2)score+=8;
+    if(words.length===3)score+=5;
+    if(roleRe.test(t)||companyRe.test(t))score-=30;
+    const prev=stripCardContacts(lines[i-1]||'');
+    const next=stripCardContacts(lines[i+1]||'');
+    if(roleRe.test(prev)||roleRe.test(next))score+=12;
+    if(companyRe.test(prev)||companyRe.test(next))score+=3;
+    const m=metaForText(metaLines,t);
+    if(m){
+      score+=Math.min(14,(Number(m.height||0)/med)*5);
+      score+=Math.min(5,Number(m.confidence||0)/20);
+    }
+    if(/^[А-ЯЁA-Z\s\-]+$/.test(t))score+=3;
+    scored.push({t,score});
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  return scored[0]?.t||'';
+}
+function bestCardPosition(lines,metaLines){
+  const labeled=labelValue(lines,/^(?:должность|position|title|job\s*title|роль|role)\b/i);
+  if(labeled)return stripCardContacts(labeled).slice(0,255);
+
+  const roleRe=/(генеральн\w*\s+директор|коммерческ\w*\s+директор|исполнительн\w*\s+директор|финансов\w*\s+директор|техническ\w*\s+директор|директор(?:\s+по)?|руководител\w*|начальник|менеджер|президент|вице[- ]?президент|председател\w*|основател\w*|владелец|партнер|партнёр|director|manager|head\s+of|head\b|chief|founder|owner|partner|president|chairman|ceo|cfo|coo|cto|cmo|cro|vice\s+president|vp\b|business\s+development|sales|commercial)/i;
+  const candidates=[];
+  for(const line of lines){
+    const t=stripCardContacts(line);
+    if(!t||t.length>120||!roleRe.test(t))continue;
+    let score=20;
+    if(t.length<70)score+=5;
+    if(/director|manager|head|chief|директор|руководител|начальник|менеджер/i.test(t))score+=7;
+    if(/\d|@|https?:|www\./i.test(t))score-=30;
+    const m=metaForText(metaLines,t);
+    if(m)score+=Math.min(5,Number(m.confidence||0)/20);
+    candidates.push({t,score});
+  }
+  candidates.sort((a,b)=>b.score-a.score);
+  return candidates[0]?.t.slice(0,255)||'';
+}
+function bestCardCompany(lines,metaLines,personName,position){
+  const labeled=labelValue(lines,/^(?:компания|organization|organisation|company|org\.?|организация|место\s+работы)\b/i);
+  if(labeled)return stripCardContacts(labeled).slice(0,255);
+
+  const legalRe=/\b(?:ООО|АО|ПАО|ИП|ГК|ГБУ|ГУП|МУП|ФГУП|LLC|JSC|LTD|INC|PLC)\b/i;
+  const brandRe=/(group|групп|holding|холдинг|company|компания|банк|bank|taxi|такси|auto|авто|motors|mobile|mobility|логист|logistic|transport|транс|tech|тех|systems|систем|solutions|решения|capital|капитал|leasing|лизинг)/i;
+  const heights=(metaLines||[]).map(x=>Number(x.height||0)).filter(x=>x>0);
+  const med=median(heights)||1;
+  const scored=[];
+
+  for(const line of lines){
+    const t=stripCardContacts(line);
+    if(!t||t.length<2||t.length>110)continue;
+    if(t===personName||t===position)continue;
+    if(/\d{6,}|@|https?:|www\.|(?:\+?7|8)[\s()\-]*\d/i.test(t))continue;
+
+    let score=0;
+    if(legalRe.test(t))score+=35;
+    if(brandRe.test(t))score+=14;
+    if(/^[А-ЯЁA-Z0-9&.\- ]+$/.test(t)&&t.replace(/[^А-ЯЁA-Z]/g,'').length>=3)score+=8;
+    const words=t.split(/\s+/).filter(Boolean);
+    if(words.length>=1&&words.length<=5)score+=4;
+    if(looksLikePersonName(t))score-=16;
+    if(/директор|руководител|менеджер|director|manager|head|ceo|cfo|coo|cto/i.test(t))score-=25;
+    const m=metaForText(metaLines,t);
+    if(m){
+      score+=Math.min(10,(Number(m.height||0)/med)*3);
+      score+=Math.min(4,Number(m.confidence||0)/25);
+    }
+    if(score>0)scored.push({t,score});
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  return scored[0]?.t.slice(0,255)||'';
+}
+function bestCardWebsite(lines,email){
+  const labeled=labelValue(lines,/^(?:сайт|web|website|www)\b/i);
+  let w=normalizeWebsiteOcr(labeled);
+  if(w&&/\./.test(w))return w;
+  const joined=' '+lines.join(' ')+' ';
+  w=normalizeWebsiteOcr(firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё\-]+(?:\s*\.\s*[a-z0-9а-яё\-]+)+(?:\/[^\s,;]*)?)/i));
+  if(email&&w===email.split('@')[1])return '';
+  return w;
+}
 function parseLeadText(text,source='voice',metaLines=[]){
   const raw=String(text||'').trim();
   const lines=source==='card'?usefulCardLines(raw):smartLines(raw);
   const joined=' '+lines.join(' ').replace(/\s+/g,' ')+' ';
-  const phoneRaw=firstMatch(joined,/((?:\+?7|8)[\s\-\(\)0-9ОOІI|l]{9,20})/i);
-  const phone=normalizePhoneLocal(phoneRaw);
+
+  const phone=source==='card'?extractPhoneOcr(lines):normalizePhoneLocal(firstMatch(joined,/((?:\+?7|8)[\s\-()0-9ОOоoІIil|]{9,24})/i));
   const email=extractEmailOcr(joined);
-  let website=normalizeWebsiteOcr(firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё-]+(?:\s*\.\s*[a-z0-9а-яё-]+)+(?:\/[^\s]*)?)/i));
-  if(email&&website===email.split('@')[1])website='';
-  const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
-  const potential=potentialM?Number(potentialM[1]):null;
-
-  let company='';
-  const companyLine=lines.find(x=>/\b(?:ООО|АО|ПАО|ИП|ГК|ГБУ|ГУП|МУП|ФГУП|LLC|JSC|LTD|INC)\b/i.test(x));
-  if(companyLine) company=stripCardContacts(companyLine).slice(0,255);
-  if(!company) company=firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
-
-  const roleRe=/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|директор|руководитель|менеджер)/i;
-  let position='';
-  const roleLine=lines.find(x=>roleRe.test(x));
-  if(roleLine) position=stripCardContacts(roleLine).slice(0,255);
+  let website=bestCardWebsite(lines,email);
 
   let contact='';
-  contact=firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
-  if(!contact){
-    const banned=/(ооо|ао|пао|ип|llc|ltd|inc|директор|руководитель|менеджер|тел|моб|phone|email|e-mail|www|http|компания|отдел|департамент|офис|office)/i;
-    const cand=lines.map(stripCardContacts).find(x=>!banned.test(x)&&x.length>=5&&x.length<=60&&/^[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+(?:\s+[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+){1,2}$/.test(x));
-    if(cand) contact=cand;
+  let position='';
+  let company='';
+  if(source==='card'){
+    contact=bestCardName(lines,metaLines);
+    position=bestCardPosition(lines,metaLines);
+    company=bestCardCompany(lines,metaLines,contact,position);
+  }else{
+    contact=firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
+    company=firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
+    position=firstMatch(joined,/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|CTO|директор|руководитель|менеджер)/i);
   }
-  if(!contact&&source==='card')contact=inferNameFromMeta(metaLines,lines);
+
+  const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
+  const potential=potentialM?Number(potentialM[1]):null;
 
   let client_type='';
   if(/таксопарк|такси парк|taxi/i.test(joined))client_type='Таксопарк';
@@ -225,9 +371,28 @@ function parseLeadText(text,source='voice',metaLines=[]){
   const nextM=joined.match(/(?:следующий шаг|договорились|нужно|надо|перезвонить|связаться)\s*[:\-]?\s*([^.;]{3,120})/i);
   if(nextM)next=nextM[1].trim();
 
-  const comment=source==='card'?'Данные распознаны с визитки автоматически. Проверьте поля перед сохранением.':('Распознано голосом'+(raw?'\n'+raw:''));
-  return {contact_name:contact,company,position,phone,email,website,client_type,needs,potential_cars:potential,potential_range:'',interest,comment,next_step:next,next_step_date:''};
+  const comment=source==='card'
+    ?'Данные распознаны с визитки автоматически. Поля распределены по структуре визитки, подписям и расположению текста.'
+    :('Распознано голосом'+(raw?'\n'+raw:''));
+
+  return {
+    contact_name:contact,
+    company,
+    position,
+    phone,
+    email,
+    website,
+    client_type,
+    needs,
+    potential_cars:potential,
+    potential_range:'',
+    interest,
+    comment,
+    next_step:next,
+    next_step_date:''
+  };
 }
+
 function applyDraft(d){
   leadForm(false,true);
   currentRecognizedText=d._raw_ocr||d._recognized_text||'';

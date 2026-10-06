@@ -632,9 +632,10 @@ async function imageToCanvas(file){
   const mx=Math.round(w*0.015),my=Math.round(h*0.015);
   const cw=Math.max(1,w-mx*2),ch=Math.max(1,h-my*2);
   const longest=Math.max(cw,ch);
-  const target=Math.min(2600,Math.max(1600,longest));
+  // OCR is much faster around 1.2-1.6K px. Do not upscale normal camera frames to 2.6K.
+  const target=longest>1600?1600:(longest<1100?Math.min(1400,Math.round(longest*1.2)):longest);
   const scale=target/longest;
-  const border=28;
+  const border=18;
   const out=document.createElement('canvas');
   out.width=Math.round(cw*scale)+border*2;
   out.height=Math.round(ch*scale)+border*2;
@@ -713,60 +714,141 @@ function mergeOcrTexts(a,b){
   return cleanOcrText(cleanOcrText(a)+'\n'+cleanOcrText(b));
 }
 
-async function ocrBusinessCard(file,progress){
-  if(!await ensureTesseract())throw new Error('OCR-модуль не загрузился');
-  progress('Подготавливаю фото…');
-  const base=await imageToCanvas(file);
-  const gray=enhanceCanvas(base,false);
-  const bw=enhanceCanvas(base,true);
-  const qrRaw=await detectCardBarcode(base);
-  let worker=null;
+let cardOcrWorker=null;
+let cardOcrWorkerPromise=null;
+let cardOcrProgressSink=null;
+let cardOcrLastProgress=-10;
+let cardOcrIdleTimer=null;
+
+function touchCardOcrWorker(){
+  if(cardOcrIdleTimer)clearTimeout(cardOcrIdleTimer);
+  cardOcrIdleTimer=setTimeout(function(){releaseCardOcrWorker()},5*60*1000);
+}
+async function getCardOcrWorker(progress){
+  cardOcrProgressSink=typeof progress==='function'?progress:null;
+  cardOcrLastProgress=-10;
+  if(cardOcrWorker){touchCardOcrWorker();return cardOcrWorker}
+  if(!cardOcrWorkerPromise){
+    cardOcrWorkerPromise=(async function(){
+      if(!await ensureTesseract())throw new Error('OCR-модуль не загрузился');
+      return await Tesseract.createWorker(['rus','eng'],1,{
+        logger:function(x){
+          const sink=cardOcrProgressSink;
+          if(!sink)return;
+          if(x.status==='recognizing text'){
+            const pct=Math.round((x.progress||0)*100);
+            if(pct>=100||pct-cardOcrLastProgress>=10){
+              cardOcrLastProgress=pct;
+              sink('Распознаю текст… '+pct+'%');
+            }
+          }else if(/loading|initializing/i.test(x.status||'')){
+            sink('OCR готовится…');
+          }
+        }
+      });
+    })();
+  }
   try{
-    worker=await Tesseract.createWorker(['rus','eng'],1,{
-      logger:function(x){
-        if(x.status==='recognizing text')progress('Распознаю текст… '+Math.round((x.progress||0)*100)+'%');
-        else if(/loading|initializing/i.test(x.status||''))progress('Загружаю языковую модель…');
-      }
-    });
-
-    const run=async function(image,psm,rect){
-      await worker.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:'1',user_defined_dpi:'300'});
-      return await worker.recognize(image,rect?{rectangle:rect,rotateAuto:true}:{rotateAuto:true},{text:true,blocks:true});
-    };
-
-    const r1=await run(gray,3,null);
-    progress('Проверяю контрастный вариант…');
-    const r2=await run(bw,11,null);
-
-    let text=mergeOcrTexts(r1?.data?.text||'',r2?.data?.text||'');
-    let meta=[...extractBlockLines(r1?.data?.blocks),...extractBlockLines(r2?.data?.blocks)];
-    let confidence=Math.max(Number(r1?.data?.confidence||0),Number(r2?.data?.confidence||0));
-
-    let draft=parseLeadText(text,'card',meta);
-    if(coreFieldCount(draft)<3){
-      const zones=[
-        {name:'верхнюю часть',left:0,top:0,width:gray.width,height:Math.round(gray.height*0.62)},
-        {name:'нижнюю часть',left:0,top:Math.round(gray.height*0.38),width:gray.width,height:Math.round(gray.height*0.62)},
-        {name:'левую часть',left:0,top:0,width:Math.round(gray.width*0.62),height:gray.height},
-        {name:'правую часть',left:Math.round(gray.width*0.38),top:0,width:Math.round(gray.width*0.62),height:gray.height}
-      ];
-      for(const z of zones){
-        progress('Уточняю '+z.name+'…');
-        const rz=await run(gray,6,{left:z.left,top:z.top,width:z.width,height:z.height});
-        text=mergeOcrTexts(text,rz?.data?.text||'');
-        meta=meta.concat(extractBlockLines(rz?.data?.blocks));
-        confidence=Math.max(confidence,Number(rz?.data?.confidence||0));
-        draft=parseLeadText(text,'card',meta);
-        if(coreFieldCount(draft)>=4)break;
-      }
-    }
-
-    return {text,confidence,meta,qrRaw,base};
+    cardOcrWorker=await cardOcrWorkerPromise;
+    touchCardOcrWorker();
+    return cardOcrWorker;
   }finally{
-    try{if(worker)await worker.terminate()}catch(e){}
+    cardOcrWorkerPromise=null;
   }
 }
+async function warmCardOcr(){
+  try{await getCardOcrWorker(null)}catch(e){}
+}
+async function releaseCardOcrWorker(){
+  if(cardOcrIdleTimer){clearTimeout(cardOcrIdleTimer);cardOcrIdleTimer=null}
+  const w=cardOcrWorker;
+  cardOcrWorker=null;
+  cardOcrProgressSink=null;
+  if(w)try{await w.terminate()}catch(e){}
+}
+function fastCardDraftEnough(d){
+  if(!d)return false;
+  const n=coreFieldCount(d);
+  if(n>=4)return true;
+  const hasContact=!!(d.contact_name||d.company);
+  const hasReach=!!(d.phone||d.email||d.website);
+  return n>=3&&hasContact&&hasReach;
+}
 
+async function ocrBusinessCard(file,progress){
+  progress=typeof progress==='function'?progress:function(){};
+  progress('Подготавливаю фото…');
+  const base=await imageToCanvas(file);
+
+  // QR/vCard is the fastest and most accurate path. If it already contains core fields, skip OCR.
+  const qrRaw=await detectCardBarcode(base);
+  if(qrRaw){
+    const qrDraft=parseVCardText(qrRaw);
+    if(coreFieldCount(qrDraft)>=3){
+      progress('Контакты считаны из QR-кода');
+      return {text:'',confidence:100,meta:[],qrRaw,base};
+    }
+  }
+
+  const worker=await getCardOcrWorker(progress);
+  const gray=enhanceCanvas(base,false);
+
+  const run=async function(image,psm,rect,rotateAuto){
+    await worker.setParameters({
+      tessedit_pageseg_mode:String(psm),
+      preserve_interword_spaces:'1',
+      user_defined_dpi:'220'
+    });
+    const opts=rect?{rectangle:rect,rotateAuto:!!rotateAuto}:{rotateAuto:!!rotateAuto};
+    return await worker.recognize(image,opts,{text:true,blocks:true});
+  };
+
+  // Fast pass: sparse text works well for business cards and avoids a mandatory second full OCR.
+  progress('Распознаю визитку…');
+  const r1=await run(gray,11,null,false);
+  let text=cleanOcrText(r1?.data?.text||'');
+  let meta=extractBlockLines(r1?.data?.blocks);
+  let confidence=Number(r1?.data?.confidence||0);
+  let draft=parseLeadText(text,'card',meta);
+
+  if(fastCardDraftEnough(draft)){
+    touchCardOcrWorker();
+    return {text,confidence,meta,qrRaw,base};
+  }
+
+  // Only difficult cards get the slower contrast pass.
+  progress('Уточняю недостающие данные…');
+  const bw=enhanceCanvas(base,true);
+  const r2=await run(bw,3,null,false);
+  text=mergeOcrTexts(text,r2?.data?.text||'');
+  meta=meta.concat(extractBlockLines(r2?.data?.blocks));
+  confidence=Math.max(confidence,Number(r2?.data?.confidence||0));
+  draft=parseLeadText(text,'card',meta);
+
+  // Worst-case fallback is limited to the zones that are normally useful:
+  // top = person/company/title, bottom = phone/e-mail/site.
+  if(!fastCardDraftEnough(draft)&&coreFieldCount(draft)<3){
+    const zones=[];
+    if(!draft.contact_name||!draft.company||!draft.position){
+      zones.push({name:'верхнюю часть',left:0,top:0,width:gray.width,height:Math.round(gray.height*0.60)});
+    }
+    if(!draft.phone||!draft.email||!draft.website){
+      zones.push({name:'нижнюю часть',left:0,top:Math.round(gray.height*0.40),width:gray.width,height:Math.round(gray.height*0.60)});
+    }
+    for(const z of zones.slice(0,2)){
+      progress('Уточняю '+z.name+'…');
+      const rz=await run(gray,6,{left:z.left,top:z.top,width:z.width,height:z.height},false);
+      text=mergeOcrTexts(text,rz?.data?.text||'');
+      meta=meta.concat(extractBlockLines(rz?.data?.blocks));
+      confidence=Math.max(confidence,Number(rz?.data?.confidence||0));
+      draft=parseLeadText(text,'card',meta);
+      if(fastCardDraftEnough(draft))break;
+    }
+  }
+
+  touchCardOcrWorker();
+  return {text,confidence,meta,qrRaw,base};
+}
 
 
 let cardCameraStream=null;
@@ -832,7 +914,10 @@ async function startCardCamera(){
 function cardLead(){
   stopCardCamera();
   el().innerHTML='<div class="card card-camera-card"><h2>📷 Лид по визитке</h2><p class="hint">Наведите камеру на визитку. Держите её ровно, без бликов, целиком внутри рамки.</p><div class="card-camera-stage"><video id="card_camera" class="card-camera-video" autoplay playsinline muted></video><div id="card_camera_guide" class="card-camera-guide"><span>ВИЗИТКА</span></div></div><div class="spacer"></div><button id="card_capture_btn" class="btn full" onclick="captureCardPhoto()" disabled>📸 Снять и распознать</button><div class="spacer"></div><button id="card_fallback_btn" class="btn secondary full" onclick="openCardFileFallback()" hidden>Выбрать фото вместо камеры</button><input id="card_file_fallback" type="file" accept="image/*" capture="environment" hidden onchange="fallbackCardFileChanged()"><div class="spacer"></div><button class="btn secondary full" onclick="stopCardCamera();homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>';
-  setTimeout(startCardCamera,0);
+  setTimeout(function(){
+    startCardCamera();
+    warmCardOcr();
+  },0);
 }
 function openCardFileFallback(){
   document.getElementById('card_file_fallback')?.click();
@@ -916,7 +1001,10 @@ async function recognizeCapturedCard(canvas){
     leadMsg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: точные контактные данные взяты из QR.</div>');
   }
 }
-window.addEventListener('pagehide',stopCardCamera);
+window.addEventListener('pagehide',function(){
+  stopCardCamera();
+  releaseCardOcrWorker();
+});
 
 let speechRec=null;
 let speechFinal='';

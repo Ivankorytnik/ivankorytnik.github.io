@@ -1435,10 +1435,10 @@ async function leadDetails(id){
   const needs=Array.isArray(d.needs)&&d.needs.length?d.needs.join(', '):'—';
   const potential=d.potential_cars??d.potential_range??'—';
   const recognized=d.recognized_text?'<details open><summary>Распознанный текст</summary><p class="hint" style="white-space:pre-wrap">'+esc(d.recognized_text)+'</p></details>':'';
-  el().innerHTML=`<div class="card"><h2>${esc(d.contact_name||d.company||'Лид')}</h2><p class="muted">${esc(d.lead_code||'')}</p><div class="lead-detail"><p><b>Компания:</b> ${esc(d.company||'—')}</p><p><b>Должность:</b> ${esc(d.position||'—')}</p><p><b>Телефон:</b> ${esc(d.phone||'—')}</p><p><b>E-mail:</b> ${esc(d.email||'—')}</p><p><b>Тип клиента:</b> ${esc(d.client_type||'—')}</p><p><b>Потребность:</b> ${esc(needs)}</p><p><b>Потенциал:</b> ${esc(potential)}</p><p><b>Интерес:</b> ${esc(d.interest||'—')}</p><p><b>Комментарий:</b><br>${esc(d.comment||'—')}</p>${recognized}</div><div class="spacer"></div><button class="btn danger full" onclick="confirmDeleteLead('${d.id}','${esc(d.lead_code||'')}')">🗑 Удалить лид</button><div class="spacer"></div><button class="btn secondary full" onclick="listLeads()">← К списку</button></div>`;
+  el().innerHTML=`<div class="card"><h2>${esc(d.contact_name||d.company||'Лид')}</h2><p class="muted">${esc(d.lead_code||'')}</p><div class="lead-detail"><p><b>Компания:</b> ${esc(d.company||'—')}</p><p><b>Должность:</b> ${esc(d.position||'—')}</p><p><b>Телефон:</b> ${esc(d.phone||'—')}</p><p><b>E-mail:</b> ${esc(d.email||'—')}</p><p><b>Тип клиента:</b> ${esc(d.client_type||'—')}</p><p><b>Потребность:</b> ${esc(needs)}</p><p><b>Потенциал:</b> ${esc(potential)}</p><p><b>Интерес:</b> ${esc(d.interest||'—')}</p><p><b>Комментарий:</b><br>${esc(d.comment||'—')}</p>${recognized}</div><div class="spacer"></div><button class="btn danger full" onclick="confirmDeleteLead('${d.id}')">🗑 Удалить лид</button><div class="spacer"></div><button class="btn secondary full" onclick="listLeads()">← К списку</button></div>`;
 }
-function confirmDeleteLead(id,code){
-  const ok=window.confirm('Удалить лид '+(code||'')+'? Это действие нельзя отменить.');
+function confirmDeleteLead(id){
+  const ok=window.confirm('Удалить этот лид? Это действие нельзя отменить.');
   if(ok) deleteLead(id);
 }
 async function deleteLead(id){

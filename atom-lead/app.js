@@ -320,14 +320,103 @@ function bestCardWebsite(lines,email){
   if(email&&w===email.split('@')[1])return '';
   return w;
 }
+
+function cleanVoiceValue(v){
+  return String(v||'')
+    .replace(/^[\s:;,.=\-–—]+/,'')
+    .replace(/[\s:;,.=\-–—]+$/,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function parseVoiceSegments(raw){
+  const text=' '+String(raw||'').replace(/\r?\n/g,' ; ').replace(/\s+/g,' ').trim()+' ';
+  const markerRe=/(меня\s+зовут|ф\s*\.?\s*и\s*\.?\s*о\s*\.?|фио|имя|контакт(?:ное\s+лицо)?|компания|организация|место\s+работы|должность|позиция|роль|телефон|мобильный|номер\s+телефона|почта|e[\s-]*mail|email|электронная\s+почта|сайт|website|web|тип\s+клиента|потребност[ьи]|интерес|потенциал|количество\s+(?:машин|авто|автомобилей)|комментарий|примечание|следующий\s+шаг|договорились)/gi;
+  const mapKey=(m)=>{
+    const k=m.toLowerCase().replace(/\s+/g,' ');
+    if(/меня зовут|фио|ф\s*\.?\s*и|^имя$|контакт/.test(k))return 'contact_name';
+    if(/компания|организация|место работы/.test(k))return 'company';
+    if(/должность|позиция|роль/.test(k))return 'position';
+    if(/телефон|мобильный|номер телефона/.test(k))return 'phone';
+    if(/почта|mail|email/.test(k))return 'email';
+    if(/сайт|website|^web$/.test(k))return 'website';
+    if(/тип клиента/.test(k))return 'client_type';
+    if(/потребност/.test(k))return 'needs';
+    if(/интерес/.test(k))return 'interest';
+    if(/потенциал|количество/.test(k))return 'potential';
+    if(/комментарий|примечание/.test(k))return 'comment';
+    if(/следующий шаг|договорились/.test(k))return 'next_step';
+    return '';
+  };
+  const hits=[];
+  let m;
+  while((m=markerRe.exec(text))){
+    hits.push({key:mapKey(m[0]),start:m.index,end:markerRe.lastIndex});
+  }
+  const out={};
+  for(let i=0;i<hits.length;i++){
+    const h=hits[i],next=hits[i+1];
+    if(!h.key)continue;
+    const val=cleanVoiceValue(text.slice(h.end,next?next.start:text.length));
+    if(val&&!out[h.key])out[h.key]=val;
+  }
+  return out;
+}
+function normalizeSpokenEmail(v){
+  let s=String(v||'').toLowerCase()
+    .replace(/\b(?:собака|собачка|at)\b/g,'@')
+    .replace(/\b(?:точка|dot)\b/g,'.')
+    .replace(/\b(?:нижнее\s+подчеркивание|нижнее\s+подчёркивание|underscore)\b/g,'_')
+    .replace(/\b(?:дефис|тире|dash)\b/g,'-')
+    .replace(/\s+/g,'');
+  return normalizeEmailOcr(s);
+}
+function simpleRussianNumber(v){
+  const direct=String(v||'').match(/\d{1,4}/);
+  if(direct)return Number(direct[0]);
+  const map={
+    'ноль':0,'нуль':0,'один':1,'одна':1,'два':2,'две':2,'три':3,'четыре':4,'пять':5,'шесть':6,'семь':7,'восемь':8,'девять':9,
+    'десять':10,'одиннадцать':11,'двенадцать':12,'тринадцать':13,'четырнадцать':14,'пятнадцать':15,'шестнадцать':16,'семнадцать':17,'восемнадцать':18,'девятнадцать':19,
+    'двадцать':20,'тридцать':30,'сорок':40,'пятьдесят':50,'шестьдесят':60,'семьдесят':70,'восемьдесят':80,'девяносто':90,
+    'сто':100,'двести':200,'триста':300,'четыреста':400,'пятьсот':500,'шестьсот':600,'семьсот':700,'восемьсот':800,'девятьсот':900
+  };
+  let total=0,found=false;
+  for(const w of String(v||'').toLowerCase().replace(/ё/g,'е').split(/[^а-я]+/)){
+    if(Object.prototype.hasOwnProperty.call(map,w)){total+=map[w];found=true}
+  }
+  return found&&total<=9999?total:null;
+}
+function voicePhoneCandidate(raw,seg){
+  const fromSeg=normalizePhoneLocal(seg||'');
+  if(fromSeg)return fromSeg;
+  const compact=String(raw||'')
+    .replace(/[ОOоo]/g,'0')
+    .replace(/[ІIil|]/g,'1');
+  const m=compact.match(/(?:\+?7|8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/);
+  if(m)return normalizePhoneLocal(m[0]);
+  const digits=compact.replace(/\D/g,'');
+  const dm=digits.match(/(?:7|8)?\d{10}/);
+  return dm?normalizePhoneLocal(dm[0]):'';
+}
+function mapVoiceInterest(v){
+  const s=String(v||'').toLowerCase();
+  if(/высок|горяч|сильн/.test(s))return 'Высокий';
+  if(/средн|тепл/.test(s))return 'Средний';
+  if(/предвар|низк|холодн/.test(s))return 'Предварительный';
+  if(/не определ|не знаю|непонят/.test(s))return 'Не определён';
+  return '';
+}
+
 function parseLeadText(text,source='voice',metaLines=[]){
   const raw=String(text||'').trim();
   const lines=source==='card'?usefulCardLines(raw):smartLines(raw);
   const joined=' '+lines.join(' ').replace(/\s+/g,' ')+' ';
+  const voiceSeg=source==='voice'?parseVoiceSegments(raw):{};
 
-  const phone=source==='card'?extractPhoneOcr(lines):normalizePhoneLocal(firstMatch(joined,/((?:\+?7|8)[\s\-()0-9ОOоoІIil|]{9,24})/i));
-  const email=extractEmailOcr(joined);
-  let website=bestCardWebsite(lines,email);
+  const phone=source==='card'?extractPhoneOcr(lines):voicePhoneCandidate(raw,voiceSeg.phone);
+  const email=source==='voice'?(normalizeSpokenEmail(voiceSeg.email)||extractEmailOcr(joined)):extractEmailOcr(joined);
+  let website=source==='voice'
+    ?normalizeWebsiteOcr((voiceSeg.website||'').replace(/\bточка\b/gi,'.').replace(/\s+/g,''))
+    :bestCardWebsite(lines,email);
 
   let contact='';
   let position='';
@@ -337,43 +426,47 @@ function parseLeadText(text,source='voice',metaLines=[]){
     position=bestCardPosition(lines,metaLines);
     company=bestCardCompany(lines,metaLines,contact,position);
   }else{
-    contact=firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
-    company=firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
-    position=firstMatch(joined,/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|CTO|директор|руководитель|менеджер)/i);
+    contact=cleanVoiceValue(voiceSeg.contact_name)||firstMatch(joined,/(?:меня зовут|это|фио|имя)\s+([А-ЯЁA-Z][а-яёa-z-]+(?:\s+[А-ЯЁA-Z][а-яёa-z-]+){1,2})/);
+    company=cleanVoiceValue(voiceSeg.company)||firstMatch(joined,/(?:компания|организация|работаю в|из компании)\s+["«]?([^,.;\n]{2,80})/i);
+    position=cleanVoiceValue(voiceSeg.position)||firstMatch(joined,/(генеральн(?:ый|ого) директор|коммерческ(?:ий|ого) директор|директор по [^,.;\n]{2,50}|руководител[ья] [^,.;\n]{0,60}|начальник [^,.;\n]{0,60}|менеджер [^,.;\n]{0,60}|CEO|CFO|COO|CTO|директор|руководитель|менеджер)/i);
   }
 
   const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
-  const potential=potentialM?Number(potentialM[1]):null;
+  const potential=source==='voice'
+    ?(simpleRussianNumber(voiceSeg.potential) ?? (potentialM?Number(potentialM[1]):null))
+    :(potentialM?Number(potentialM[1]):null);
 
   let client_type='';
-  if(/таксопарк|такси парк|taxi/i.test(joined))client_type='Таксопарк';
-  else if(/каршеринг|carsharing/i.test(joined))client_type='Каршеринг';
-  else if(/лизинг|leasing/i.test(joined))client_type='Лизинговая компания';
-  else if(/государствен|госкомпан|гбу|гуп|фгуп/i.test(joined))client_type='Государственная компания';
-  else if(/партн[её]р/i.test(joined))client_type='Партнёр';
+  const typeText=' '+String(voiceSeg.client_type||'')+' '+joined;
+  if(/таксопарк|такси парк|taxi/i.test(typeText))client_type='Таксопарк';
+  else if(/каршеринг|carsharing/i.test(typeText))client_type='Каршеринг';
+  else if(/лизинг|leasing/i.test(typeText))client_type='Лизинговая компания';
+  else if(/государствен|госкомпан|гбу|гуп|фгуп/i.test(typeText))client_type='Государственная компания';
+  else if(/партн[её]р/i.test(typeText))client_type='Партнёр';
 
   const needs=[];
   const add=n=>{if(!needs.includes(n))needs.push(n)};
-  if(/тест[- ]?драйв/i.test(joined))add('Тест-драйв');
-  if(/лизинг/i.test(joined))add('Лизинг');
-  if(/каршеринг/i.test(joined))add('Каршеринг');
-  if(/такси|таксопарк/i.test(joined))add('Такси');
-  if(/партн[её]р/i.test(joined))add('Партнёрство');
-  if(/автопарк|корпоративн.*парк/i.test(joined))add('Корпоративный автопарк');
-  if(/купить|покупк|закупк|приобрест/i.test(joined))add('Покупка автомобилей');
+  const needsText=' '+String(voiceSeg.needs||'')+' '+joined;
+  if(/тест[- ]?драйв/i.test(needsText))add('Тест-драйв');
+  if(/лизинг/i.test(needsText))add('Лизинг');
+  if(/каршеринг/i.test(needsText))add('Каршеринг');
+  if(/такси|таксопарк/i.test(needsText))add('Такси');
+  if(/партн[её]р/i.test(needsText))add('Партнёрство');
+  if(/автопарк|корпоративн.*парк/i.test(needsText))add('Корпоративный автопарк');
+  if(/купить|покупк|закупк|приобрест/i.test(needsText))add('Покупка автомобилей');
 
-  let interest='';
-  if(/высок(?:ий|ая).*интерес|горяч/i.test(joined))interest='Высокий';
-  else if(/средн(?:ий|яя).*интерес/i.test(joined))interest='Средний';
-  else if(/предварительн/i.test(joined))interest='Предварительный';
+  let interest=source==='voice'?mapVoiceInterest(voiceSeg.interest):'';
+  if(!interest&&/высок(?:ий|ая).*интерес|горяч/i.test(joined))interest='Высокий';
+  else if(!interest&&/средн(?:ий|яя).*интерес/i.test(joined))interest='Средний';
+  else if(!interest&&/предварительн/i.test(joined))interest='Предварительный';
 
-  let next='';
+  let next=source==='voice'?cleanVoiceValue(voiceSeg.next_step):'';
   const nextM=joined.match(/(?:следующий шаг|договорились|нужно|надо|перезвонить|связаться)\s*[:\-]?\s*([^.;]{3,120})/i);
-  if(nextM)next=nextM[1].trim();
+  if(!next&&nextM)next=nextM[1].trim();
 
   const comment=source==='card'
     ?'Данные распознаны с визитки автоматически. Поля распределены по структуре визитки, подписям и расположению текста.'
-    :('Распознано голосом'+(raw?'\n'+raw:''));
+    :(cleanVoiceValue(voiceSeg.comment)||'Данные распознаны голосом автоматически.');
 
   return {
     contact_name:contact,

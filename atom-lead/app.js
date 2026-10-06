@@ -273,7 +273,9 @@ async function ensureTesseract(){
 
 async function imageToCanvas(file){
   let source=null,w=0,h=0,url='';
-  try{
+  if(file instanceof HTMLCanvasElement){
+    source=file;w=file.width;h=file.height;
+  }else try{
     source=await createImageBitmap(file,{imageOrientation:'from-image'});
     w=source.width;h=source.height;
   }catch(e){
@@ -300,7 +302,7 @@ async function imageToCanvas(file){
   ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(source,mx,my,cw,ch,border,border,out.width-border*2,out.height-border*2);
-  try{source.close&&source.close()}catch(e){}
+  try{if(!(file instanceof HTMLCanvasElement)&&source.close)source.close()}catch(e){}
   if(url)URL.revokeObjectURL(url);
   return out;
 }
@@ -425,10 +427,158 @@ async function ocrBusinessCard(file,progress){
   }
 }
 
-function cardLead(){
-  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Распознавание выполняется прямо в телефоне, без платного API.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
+
+let cardCropSource=null;
+let cardCropRect=null;
+let cardCropDrag=null;
+
+function cardCanvasPoint(ev,canvas){
+  const r=canvas.getBoundingClientRect();
+  return {
+    x:(ev.clientX-r.left)*canvas.width/r.width,
+    y:(ev.clientY-r.top)*canvas.height/r.height
+  };
+}
+function resetCardCrop(){
+  if(!cardCropSource)return;
+  const m=Math.max(18,Math.round(Math.min(cardCropSource.width,cardCropSource.height)*0.035));
+  cardCropRect={x:m,y:m,w:Math.max(120,cardCropSource.width-m*2),h:Math.max(80,cardCropSource.height-m*2)};
+  drawCardCrop();
+}
+function drawCardCrop(){
+  const canvas=document.getElementById('card_crop_canvas');
+  if(!canvas||!cardCropSource||!cardCropRect)return;
+  canvas.width=cardCropSource.width;
+  canvas.height=cardCropSource.height;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(cardCropSource,0,0);
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.48)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(cardCropSource,cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h,cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h);
+  ctx.strokeStyle='#1aa7a5';
+  ctx.lineWidth=Math.max(4,Math.round(canvas.width/350));
+  ctx.strokeRect(cardCropRect.x,cardCropRect.y,cardCropRect.w,cardCropRect.h);
+  const hs=Math.max(14,Math.round(canvas.width/65));
+  const pts=[
+    [cardCropRect.x,cardCropRect.y],
+    [cardCropRect.x+cardCropRect.w,cardCropRect.y],
+    [cardCropRect.x,cardCropRect.y+cardCropRect.h],
+    [cardCropRect.x+cardCropRect.w,cardCropRect.y+cardCropRect.h]
+  ];
+  ctx.fillStyle='#fff';ctx.strokeStyle='#1aa7a5';ctx.lineWidth=Math.max(3,Math.round(canvas.width/500));
+  for(const [x,y] of pts){
+    ctx.beginPath();ctx.arc(x,y,hs,0,Math.PI*2);ctx.fill();ctx.stroke();
+  }
+  ctx.restore();
+}
+function cropHandleAt(p){
+  if(!cardCropRect)return null;
+  const r=cardCropRect;
+  const radius=Math.max(45,Math.min(cardCropSource.width,cardCropSource.height)*0.055);
+  const pts=[
+    ['nw',r.x,r.y],['ne',r.x+r.w,r.y],['sw',r.x,r.y+r.h],['se',r.x+r.w,r.y+r.h]
+  ];
+  for(const [name,x,y] of pts){
+    if(Math.hypot(p.x-x,p.y-y)<=radius)return name;
+  }
+  if(p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h)return 'move';
+  return null;
+}
+function clampCardRect(r){
+  const W=cardCropSource.width,H=cardCropSource.height,minW=Math.max(140,W*.16),minH=Math.max(90,H*.14);
+  r.w=Math.max(minW,r.w);r.h=Math.max(minH,r.h);
+  r.x=Math.max(0,Math.min(W-r.w,r.x));
+  r.y=Math.max(0,Math.min(H-r.h,r.y));
+  if(r.x+r.w>W)r.w=W-r.x;
+  if(r.y+r.h>H)r.h=H-r.y;
+  return r;
+}
+function onCardCropDown(ev){
+  const canvas=document.getElementById('card_crop_canvas');
+  if(!canvas||!cardCropRect)return;
+  ev.preventDefault();
+  const p=cardCanvasPoint(ev,canvas);
+  const mode=cropHandleAt(p);
+  if(!mode)return;
+  cardCropDrag={mode,start:p,rect:{...cardCropRect}};
+  try{canvas.setPointerCapture(ev.pointerId)}catch{}
+}
+function onCardCropMove(ev){
+  if(!cardCropDrag||!cardCropRect)return;
+  const canvas=document.getElementById('card_crop_canvas');
+  if(!canvas)return;
+  ev.preventDefault();
+  const p=cardCanvasPoint(ev,canvas),d=cardCropDrag,dx=p.x-d.start.x,dy=p.y-d.start.y;
+  let r={...d.rect};
+  if(d.mode==='move'){r.x+=dx;r.y+=dy}
+  if(d.mode==='nw'){r.x+=dx;r.y+=dy;r.w-=dx;r.h-=dy}
+  if(d.mode==='ne'){r.y+=dy;r.w+=dx;r.h-=dy}
+  if(d.mode==='sw'){r.x+=dx;r.w-=dx;r.h+=dy}
+  if(d.mode==='se'){r.w+=dx;r.h+=dy}
+  const minW=Math.max(140,cardCropSource.width*.16),minH=Math.max(90,cardCropSource.height*.14);
+  if(r.w<minW){
+    if(d.mode==='nw'||d.mode==='sw')r.x-=minW-r.w;
+    r.w=minW;
+  }
+  if(r.h<minH){
+    if(d.mode==='nw'||d.mode==='ne')r.y-=minH-r.h;
+    r.h=minH;
+  }
+  cardCropRect=clampCardRect(r);
+  drawCardCrop();
+}
+function onCardCropUp(ev){
+  cardCropDrag=null;
+}
+async function prepareCardCrop(){
+  const file=document.getElementById('card_file')?.files?.[0];
+  const box=document.getElementById('card_crop_box');
+  const msg=document.getElementById('cardmsg');
+  if(!file){if(box)box.hidden=true;return}
+  try{
+    if(msg)msg.innerHTML='<div class="notice">Готовлю фото для обрезки…</div>';
+    cardCropSource=await imageToCanvas(file);
+    resetCardCrop();
+    if(box)box.hidden=false;
+    const canvas=document.getElementById('card_crop_canvas');
+    if(canvas){
+      canvas.onpointerdown=onCardCropDown;
+      canvas.onpointermove=onCardCropMove;
+      canvas.onpointerup=onCardCropUp;
+      canvas.onpointercancel=onCardCropUp;
+    }
+    const scan=document.getElementById('card_scan_btn');
+    if(scan)scan.disabled=false;
+    if(msg)msg.innerHTML='<div class="notice">Передвиньте рамку так, чтобы внутри осталась только визитка.</div>';
+  }catch(e){
+    if(msg)msg.innerHTML='<div class="error">'+esc(e.message||'Не удалось открыть фото')+'</div>';
+  }
+}
+function rotateCardCrop(){
+  if(!cardCropSource)return;
+  const src=cardCropSource,out=document.createElement('canvas');
+  out.width=src.height;out.height=src.width;
+  const ctx=out.getContext('2d');
+  ctx.translate(out.width,0);ctx.rotate(Math.PI/2);ctx.drawImage(src,0,0);
+  cardCropSource=out;
+  resetCardCrop();
+}
+function getCroppedCardCanvas(){
+  if(!cardCropSource||!cardCropRect)return null;
+  const r=cardCropRect,out=document.createElement('canvas');
+  out.width=Math.max(1,Math.round(r.w));out.height=Math.max(1,Math.round(r.h));
+  const ctx=out.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,out.width,out.height);
+  ctx.drawImage(cardCropSource,r.x,r.y,r.w,r.h,0,0,out.width,out.height);
+  return out;
 }
 
+function cardLead(){
+  cardCropSource=null;cardCropRect=null;cardCropDrag=null;
+  el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. После выбора появится рамка: оставьте внутри только визитку, без стола, рук и лишнего фона.</p><input id="card_file" type="file" accept="image/*" capture="environment" onchange="prepareCardCrop()"><div id="card_crop_box" class="cropbox" hidden><canvas id="card_crop_canvas" class="cropcanvas"></canvas><p class="hint crophelp">Перетаскивайте рамку и круглые углы. Лучше оставить небольшой запас по краям визитки.</p><div class="row"><button type="button" class="btn secondary" onclick="rotateCardCrop()">↻ Повернуть 90°</button><button type="button" class="btn secondary" onclick="resetCardCrop()">Сбросить рамку</button></div></div><div class="spacer"></div><button id="card_scan_btn" class="btn full" onclick="scanCard()" disabled>Распознать выделенную визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
+}
 
 async function scanCard(){
   const m=document.getElementById('cardmsg');
@@ -439,7 +589,9 @@ async function scanCard(){
   }
   m.innerHTML='<div class="notice">Подготавливаю распознавание…</div>';
   try{
-    const ocr=await ocrBusinessCard(file,function(t){
+    const cropped=getCroppedCardCanvas();
+    if(!cropped)throw new Error('Сначала выделите визитку рамкой');
+    const ocr=await ocrBusinessCard(cropped,function(t){
       m.innerHTML='<div class="notice">'+esc(t)+'</div>';
     });
     if(!ocr.text&&!ocr.qrRaw)throw new Error('Текст на визитке не распознан');

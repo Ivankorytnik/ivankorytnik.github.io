@@ -59,14 +59,123 @@ function stripCardContacts(line){
     .replace(/\s+/g,' ').trim();
 }
 
-function parseLeadText(text,source='voice'){
+
+function normalizeEmailOcr(v){
+  let s=String(v||'').replace(/\s+/g,'').trim();
+  const map={'А':'A','а':'a','В':'B','в':'b','С':'C','с':'c','Е':'E','е':'e','Н':'H','н':'h','К':'K','к':'k','М':'M','м':'m','О':'O','о':'o','Р':'P','р':'p','Т':'T','т':'t','Х':'X','х':'x','У':'Y','у':'y'};
+  s=s.replace(/[АаВвСсЕеНнКкМмОоРрТтХхУу]/g,ch=>map[ch]||ch).toLowerCase();
+  s=s.replace(/[;,]/g,'.').replace(/\.{2,}/g,'.');
+  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s)?s:'';
+}
+function extractEmailOcr(text){
+  const s=String(text||'').replace(/\s*@\s*/g,'@').replace(/\s*\.\s*(?=[A-Za-zА-Яа-яЁё]{2,8}\b)/g,'.');
+  const candidates=s.match(/[A-Za-zА-Яа-яЁё0-9._%+\-]{1,64}@[A-Za-zА-Яа-яЁё0-9.\-]{2,100}\.[A-Za-zА-Яа-яЁё]{2,8}/g)||[];
+  for(const x of candidates){const e=normalizeEmailOcr(x);if(e)return e}
+  return '';
+}
+function normalizeWebsiteOcr(v){
+  let s=String(v||'').replace(/\s+/g,'').trim().replace(/[;,]/g,'.').replace(/\.{2,}/g,'.');
+  s=s.replace(/^[^a-zа-яё0-9]+/i,'').replace(/[.,;:]+$/,'');
+  return s;
+}
+function coreFieldCount(d){
+  return [d&&d.contact_name,d&&d.company,d&&d.position,d&&d.phone,d&&d.email,d&&d.website].filter(Boolean).length;
+}
+function extractBlockLines(blocks){
+  const out=[];
+  for(const block of blocks||[]){
+    for(const p of block.paragraphs||[]){
+      for(const line of p.lines||[]){
+        const text=sanitizeCardLine(line.text||'');
+        if(!text)continue;
+        const b=line.bbox||{};
+        out.push({
+          text,
+          confidence:Number(line.confidence||0),
+          x0:Number(b.x0||0),y0:Number(b.y0||0),x1:Number(b.x1||0),y1:Number(b.y1||0),
+          height:Math.max(0,Number(b.y1||0)-Number(b.y0||0)),
+          width:Math.max(0,Number(b.x1||0)-Number(b.x0||0))
+        });
+      }
+    }
+  }
+  return out;
+}
+function inferNameFromMeta(metaLines,alreadyLines){
+  const banned=/(ооо|ао|пао|ип|llc|ltd|inc|директор|руководитель|менеджер|тел|моб|phone|email|e-mail|www|http|компания|отдел|департамент|офис|office|москва|moscow|россия|russia)/i;
+  const arr=(metaLines||[]).map(x=>{
+    const t=stripCardContacts(x.text||'');
+    const words=t.split(/\s+/).filter(Boolean);
+    let score=0;
+    if(x.confidence>=40)score+=x.confidence/20;
+    score+=Math.min(8,(x.height||0)/8);
+    if(words.length===2)score+=8;
+    else if(words.length===3)score+=5;
+    if(/^[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z\-]+(?:\s+[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z\-]+){1,2}$/.test(t))score+=10;
+    if(banned.test(t)||/\d|@|\.ru\b|\.com\b/i.test(t))score-=25;
+    if(t.length<5||t.length>60)score-=15;
+    return {t,score};
+  }).filter(x=>x.t&&x.score>5).sort((a,b)=>b.score-a.score);
+  return arr[0]?.t||'';
+}
+function mergeDraft(base,extra){
+  const out={...(base||{})};
+  for(const k of ['contact_name','company','position','phone','email','website','client_type','potential_range','interest','next_step','next_step_date']){
+    if(!out[k]&&extra&&extra[k])out[k]=extra[k];
+  }
+  if((out.potential_cars===null||out.potential_cars===undefined||out.potential_cars==='')&&extra&&extra.potential_cars!==null&&extra.potential_cars!==undefined)out.potential_cars=extra.potential_cars;
+  out.needs=[...new Set([...(out.needs||[]),...((extra&&extra.needs)||[])])];
+  return out;
+}
+function parseVCardText(raw){
+  const s=String(raw||'').trim();
+  const out={contact_name:'',company:'',position:'',phone:'',email:'',website:'',client_type:'',needs:[],potential_cars:null,potential_range:'',interest:'',comment:'',next_step:'',next_step_date:''};
+  if(/^BEGIN:VCARD/i.test(s)){
+    const get=(name)=>{
+      const m=s.match(new RegExp('(?:^|\\n)'+name+'(?:;[^:\\n]+)*:([^\\r\\n]+)','i'));
+      return m?m[1].trim():'';
+    };
+    out.contact_name=get('FN')||get('N').split(';').filter(Boolean).reverse().join(' ').trim();
+    out.company=get('ORG').replace(/;/g,' ').trim();
+    out.position=get('TITLE');
+    out.phone=normalizePhoneLocal(get('TEL'));
+    out.email=normalizeEmailOcr(get('EMAIL'));
+    out.website=normalizeWebsiteOcr(get('URL'));
+    return out;
+  }
+  if(/^MECARD:/i.test(s)){
+    const get=(name)=>{const m=s.match(new RegExp(name+':([^;]+)','i'));return m?m[1].trim():''};
+    out.contact_name=get('N');
+    out.company=get('ORG');
+    out.position=get('TITLE');
+    out.phone=normalizePhoneLocal(get('TEL'));
+    out.email=normalizeEmailOcr(get('EMAIL'));
+    out.website=normalizeWebsiteOcr(get('URL'));
+    return out;
+  }
+  if(/^https?:\/\//i.test(s)||/^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(s))out.website=normalizeWebsiteOcr(s);
+  return out;
+}
+async function detectCardBarcode(canvas){
+  try{
+    if(!('BarcodeDetector' in window))return null;
+    const formats=await BarcodeDetector.getSupportedFormats();
+    if(!formats.includes('qr_code'))return null;
+    const det=new BarcodeDetector({formats:['qr_code']});
+    const res=await det.detect(canvas);
+    return res&&res[0]&&res[0].rawValue?String(res[0].rawValue):null;
+  }catch{return null}
+}
+
+function parseLeadText(text,source='voice',metaLines=[]){
   const raw=String(text||'').trim();
   const lines=source==='card'?usefulCardLines(raw):smartLines(raw);
   const joined=' '+lines.join(' ').replace(/\s+/g,' ')+' ';
   const phoneRaw=firstMatch(joined,/((?:\+?7|8)[\s\-\(\)0-9ОOІI|l]{9,20})/i);
   const phone=normalizePhoneLocal(phoneRaw);
-  const email=firstMatch(joined,/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i).toLowerCase();
-  const website=firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё-]+(?:\.[a-z0-9а-яё-]+)+(?:\/[^\s]*)?)/i);
+  const email=extractEmailOcr(joined);
+  let website=normalizeWebsiteOcr(firstMatch(joined,/((?:https?:\/\/)?(?:www\.)?[a-z0-9а-яё-]+(?:\s*\.\s*[a-z0-9а-яё-]+)+(?:\/[^\s]*)?)/i));
+  if(email&&website===email.split('@')[1])website='';
   const potentialM=joined.match(/(?:около|примерно|до|на)?\s*(\d{1,4})\s*(?:авто|автомобил|машин|единиц)/i);
   const potential=potentialM?Number(potentialM[1]):null;
 
@@ -87,6 +196,7 @@ function parseLeadText(text,source='voice'){
     const cand=lines.map(stripCardContacts).find(x=>!banned.test(x)&&x.length>=5&&x.length<=60&&/^[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+(?:\s+[А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z-]+){1,2}$/.test(x));
     if(cand) contact=cand;
   }
+  if(!contact&&source==='card')contact=inferNameFromMeta(metaLines,lines);
 
   let client_type='';
   if(/таксопарк|такси парк|taxi/i.test(joined))client_type='Таксопарк';
@@ -260,12 +370,14 @@ function cleanOcrText(text){
 function mergeOcrTexts(a,b){
   return cleanOcrText(cleanOcrText(a)+'\n'+cleanOcrText(b));
 }
+
 async function ocrBusinessCard(file,progress){
   if(!await ensureTesseract())throw new Error('OCR-модуль не загрузился');
   progress('Подготавливаю фото…');
   const base=await imageToCanvas(file);
   const gray=enhanceCanvas(base,false);
   const bw=enhanceCanvas(base,true);
+  const qrRaw=await detectCardBarcode(base);
   let worker=null;
   try{
     worker=await Tesseract.createWorker(['rus','eng'],1,{
@@ -274,15 +386,40 @@ async function ocrBusinessCard(file,progress){
         else if(/loading|initializing/i.test(x.status||''))progress('Загружаю языковую модель…');
       }
     });
-    await worker.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1',user_defined_dpi:'300'});
-    const r1=await worker.recognize(gray,{rotateAuto:true});
-    progress('Проверяю контрастный вариант…');
-    await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1',user_defined_dpi:'300'});
-    const r2=await worker.recognize(bw,{rotateAuto:true});
-    return {
-      text:mergeOcrTexts(r1&&r1.data?r1.data.text:'',r2&&r2.data?r2.data.text:''),
-      confidence:Math.max(Number(r1&&r1.data?r1.data.confidence:0),Number(r2&&r2.data?r2.data.confidence:0))
+
+    const run=async function(image,psm,rect){
+      await worker.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:'1',user_defined_dpi:'300'});
+      return await worker.recognize(image,rect?{rectangle:rect,rotateAuto:true}:{rotateAuto:true},{text:true,blocks:true});
     };
+
+    const r1=await run(gray,3,null);
+    progress('Проверяю контрастный вариант…');
+    const r2=await run(bw,11,null);
+
+    let text=mergeOcrTexts(r1?.data?.text||'',r2?.data?.text||'');
+    let meta=[...extractBlockLines(r1?.data?.blocks),...extractBlockLines(r2?.data?.blocks)];
+    let confidence=Math.max(Number(r1?.data?.confidence||0),Number(r2?.data?.confidence||0));
+
+    let draft=parseLeadText(text,'card',meta);
+    if(coreFieldCount(draft)<3){
+      const zones=[
+        {name:'верхнюю часть',left:0,top:0,width:gray.width,height:Math.round(gray.height*0.62)},
+        {name:'нижнюю часть',left:0,top:Math.round(gray.height*0.38),width:gray.width,height:Math.round(gray.height*0.62)},
+        {name:'левую часть',left:0,top:0,width:Math.round(gray.width*0.62),height:gray.height},
+        {name:'правую часть',left:Math.round(gray.width*0.38),top:0,width:Math.round(gray.width*0.62),height:gray.height}
+      ];
+      for(const z of zones){
+        progress('Уточняю '+z.name+'…');
+        const rz=await run(gray,6,{left:z.left,top:z.top,width:z.width,height:z.height});
+        text=mergeOcrTexts(text,rz?.data?.text||'');
+        meta=meta.concat(extractBlockLines(rz?.data?.blocks));
+        confidence=Math.max(confidence,Number(rz?.data?.confidence||0));
+        draft=parseLeadText(text,'card',meta);
+        if(coreFieldCount(draft)>=4)break;
+      }
+    }
+
+    return {text,confidence,meta,qrRaw,base};
   }finally{
     try{if(worker)await worker.terminate()}catch(e){}
   }
@@ -291,6 +428,7 @@ async function ocrBusinessCard(file,progress){
 function cardLead(){
   el().innerHTML=`<div class="card"><h2>📷 Лид по визитке</h2><p class="hint">Сфотографируйте визитку или выберите фото. Распознавание выполняется прямо в телефоне, без платного API.</p><input id="card_file" type="file" accept="image/*" capture="environment"><div class="spacer"></div><button class="btn full" onclick="scanCard()">Распознать визитку</button><div class="spacer"></div><button class="btn secondary full" onclick="homeFromApi()">← Главное меню</button><div id="cardmsg"></div></div>`;
 }
+
 
 async function scanCard(){
   const m=document.getElementById('cardmsg');
@@ -304,11 +442,17 @@ async function scanCard(){
     const ocr=await ocrBusinessCard(file,function(t){
       m.innerHTML='<div class="notice">'+esc(t)+'</div>';
     });
-    if(!ocr.text)throw new Error('Текст на визитке не распознан');
-    const draft=parseLeadText(ocr.text,'card');
-    draft._raw_ocr=usefulCardLines(ocr.text).join('\n');
+    if(!ocr.text&&!ocr.qrRaw)throw new Error('Текст на визитке не распознан');
+    let draft=parseLeadText(ocr.text||'','card',ocr.meta||[]);
+    if(ocr.qrRaw){
+      draft=mergeDraft(draft,parseVCardText(ocr.qrRaw));
+      draft._qr_found=true;
+    }
+    draft._raw_ocr=usefulCardLines(ocr.text||'').join('\n');
     draft._ocr_confidence=ocr.confidence;
     applyDraft(draft);
+    const msg=document.getElementById('leadmsg');
+    if(msg&&draft._qr_found)msg.insertAdjacentHTML('afterbegin','<div class="notice">✅ Найден QR-код визитки: контактные данные из QR использованы как более точные.</div>');
   }catch(e){
     m.innerHTML='<div class="error">'+esc(e.message||'Ошибка распознавания')+'</div>';
   }

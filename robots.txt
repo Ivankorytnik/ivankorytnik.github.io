@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Sitemap: https://ivankorytnik.github.io/sitemap.xml
+
+# Public expert profile may be indexed by search and AI discovery crawlers.
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /

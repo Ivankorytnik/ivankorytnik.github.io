@@ -45,6 +45,7 @@
   </script>
 
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/ivan-editorial.css">
 
   <style>
     /*
@@ -71,20 +72,14 @@
   <header class="header">
     <div class="container header__inner">
 
-      <a href="#top" class="logo">
-        Иван Корытник
-      </a>
+      <a href="#top" class="logo" aria-label="Иван Корытник, наверх">Иван Корытник<span class="logo__dot">.</span></a>
 
       <nav class="nav" aria-label="Основное меню">
-        <a href="#about">Профиль</a>
-        <a href="taxi-expert.html">Эксперт по такси</a>
-        <a href="#focus">Фокус</a>
-        <a href="#skills">Компетенции</a>
+        <a href="#about">Обо мне</a>
+        <a href="#taxi-expertise">Экспертиза</a>
         <a href="#experience">Опыт</a>
-        <a href="#results">Цифры</a>
-        <a href="#education">Образование</a>
-        <a href="#photo">Фото</a>
-        <a href="#contacts">Контакты</a>
+        <a href="#results">Результаты</a>
+        <a href="#contacts" class="nav__contact">Связаться ↗</a>
       </nav>
 
     </div>
@@ -92,119 +87,53 @@
 
   <main id="top">
 
-    <!-- ГЛАВНЫЙ ЭКРАН -->
-
-    <section class="hero">
+    <!-- ГЛАВНЫЙ ЭКРАН: авторский персональный стиль -->
+    <section class="hero" aria-labelledby="hero-title">
       <div class="container hero__inner">
-
         <div class="hero__content">
-
-          <p class="hero__tag">
-            Эксперт по таксопаркам России • B2B • Партнёрства • Аналитика
-          </p>
-
-          <h1>Иван Корытник</h1>
-
+          <p class="hero__tag">Эксперт по рынку такси России · B2B · Партнёрства</p>
+          <h1 id="hero-title">
+            Иван Корытник.<br>
+            <em>Помогаю бизнесу выходить на рынок такси России.</em>
+          </h1>
           <p class="hero__subtitle">
-            Эксперт по рынку такси России /
-            Руководитель B2B-направления /
-            Коммерческая аналитика
+            От стратегии выхода на рынок до партнёрств с таксопарками.
           </p>
-
           <p class="hero__text">
-            Помогаю компаниям разобраться в российском рынке такси, выстроить выход на таксопарки,
-            найти релевантных партнёров и развивать продажи транспортным компаниям.
-            Опыт в Gett, GetCar, Яндекс и АТОМ.
+            С 2012 года развиваю транспортные сервисы, партнёрские сети и B2B-продажи.
+            Помогаю компаниям понимать потребности таксопарков, находить точки роста
+            и выстраивать управляемые продажи. Опыт Gett, GetCar, Яндекс и АТОМ.
           </p>
-
           <div class="hero__actions">
-
-            <!-- ОСНОВНЫЕ КНОПКИ -->
-
             <div class="hero__actions-primary">
-
-              <a href="taxi-expert.html" class="button">
-                Консультации по рынку такси
+              <a href="mailto:rezkor@mail.ru?subject=%D0%9E%D0%B1%D1%81%D1%83%D0%B4%D0%B8%D1%82%D1%8C%20B2B-%D1%81%D0%BE%D1%82%D1%80%D1%83%D0%B4%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D1%82%D0%B2%D0%BE" class="button">
+                Обсудить сотрудничество <span aria-hidden="true">↗</span>
               </a>
-
-              <a href="#experience" class="button">
-                Смотреть опыт
+              <a href="#experience" class="button button--outline">
+                Посмотреть опыт <span aria-hidden="true">↓</span>
               </a>
-
-              <a href="#results" class="button">
-                Достижения в цифрах
-              </a>
-
-              <a
-                href="assets/files/resume_ivan_korytnik.pdf"
-                class="button button--download"
-                download
-              >
-                Скачать резюме
-              </a>
-
             </div>
-
-            <!-- КОНТАКТНЫЕ КНОПКИ -->
-
             <div class="hero__actions-social">
-
-              <a
-                href="assets/ivan-korytnik.vcf"
-                class="button button--contact"
-                download
-              >
-                Добавить в контакты
-              </a>
-
-              <a
-                href="https://max.ru/u/f9LHodD0cOK2WZ9GUnlRLFgp4-6ZzgdKAvvW_a0TJdMHZIym4xPPhZG7xAs"
-                class="button button--max"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Перейти в MAX
-              </a>
-
-              <!--
-                href является резервной ссылкой.
-                На телефоне JavaScript сначала попробует открыть приложение.
-              -->
-
-              <a
-                href="https://t.me/Iv_kory"
-                class="button button--telegram telegram-link"
-                data-telegram-link
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Открыть Telegram Ивана Корытника"
-              >
-                Перейти в Telegram
-              </a>
-
+              <a href="taxi-expert.html">Консультации по рынку такси ↗</a>
+              <a href="assets/files/resume_ivan_korytnik.pdf" download>Скачать резюме ↓</a>
+              <a href="assets/ivan-korytnik.vcf" download>Сохранить контакт ↓</a>
             </div>
-
           </div>
-
         </div>
-
-        <!-- ГЛАВНОЕ ФОТО -->
-
-        <div class="hero__photo">
-
+        <figure class="hero__photo">
           <div class="hero__photo-frame">
-
-            <img
-              src="assets/images/Atom_auto.jpg"
-              alt="Иван Корытник"
-              width="1200"
-              height="1600"
-            >
-
+            <img src="assets/images/Atom_auto.jpg"
+                 alt="Иван Корытник на презентации электромобиля АТОМ"
+                 width="512" height="432" fetchpriority="high">
           </div>
-
-        </div>
-
+          <figcaption>Иван Корытник / АТОМ</figcaption>
+        </figure>
+      </div>
+      <div class="container hero__proof" aria-label="Профессиональный опыт в цифрах">
+        <div class="hero__proof-item"><strong>14+</strong><span>лет в транспортных сервисах с 2012 года</span></div>
+        <div class="hero__proof-item"><strong>700+</strong><span>транспортных компаний в Gett</span></div>
+        <div class="hero__proof-item"><strong>530</strong><span>таксопарков, подключённых в GetCar</span></div>
+        <div class="hero__proof-item"><strong>50 000+</strong><span>автомобилей в партнёрской сети Gett</span></div>
       </div>
     </section>
 
